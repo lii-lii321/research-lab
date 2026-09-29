@@ -5,6 +5,14 @@
 面向数据科学工作流的智能实验平台：从一份 CSV 到一份可复现的研究报告。
 AI 只负责提出计划与解释结果 —— 所有数字来自真实执行的代码。
 
+| 分析流程 | ML 实验室 |
+|---|---|
+| ![分析流程](docs/images/ui_flow.png) | ![ML实验室](docs/images/ui_ml.png) |
+
+**自动研究 Agent**：一句话任务，全自动走完 画像 → 研究问题 → 统计实验 → ML 基线 → 文献检索 → 报告
+
+![自动研究Agent](docs/images/ui_agent.png)
+
 ## 当前阶段
 
 **v0.5.0：Paper RAG —— Agent 自动检索并引用 arXiv 相关文献**
