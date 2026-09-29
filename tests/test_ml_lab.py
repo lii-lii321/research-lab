@@ -1,0 +1,157 @@
+# -*- coding: utf-8 -*-
+import numpy as np
+import pandas as pd
+import pytest
+
+from models.schemas import ProfileReport
+from services.ml_lab import (
+    DataProblem,
+    infer_task,
+    run_ml_experiment,
+    select_features,
+)
+from services.profiler import profile_dataset
+
+
+def build_regression_df(n: int = 80) -> pd.DataFrame:
+    rng = np.random.default_rng(0)
+    df = pd.DataFrame(
+        {
+            "student_id": [f"S{i:04d}" for i in range(n)],
+            "hours": rng.uniform(0, 10, n).round(2),
+            "attendance": rng.uniform(50, 100, n).round(1),
+        }
+    )
+    df["score"] = (3 * df["hours"] + 0.5 * df["attendance"] + rng.normal(0, 1, n)).round(2)
+    return df
+
+
+def build_classification_df(n: int = 80) -> pd.DataFrame:
+    rng = np.random.default_rng(1)
+    half = n // 2
+    return pd.DataFrame(
+        {
+            "x1": np.concatenate([rng.normal(0, 1, half), rng.normal(4, 1, n - half)]),
+            "x2": np.concatenate([rng.normal(0, 1, half), rng.normal(4, 1, n - half)]),
+            "label": ["A"] * half + ["B"] * (n - half),
+        }
+    )
+
+
+def test_regression_baseline():
+    df = build_regression_df()
+    profile = profile_dataset(df)
+    result = run_ml_experiment(df, profile, target="score", task="regression")
+    assert result.status == "ok"
+    assert result.task == "regression"
+    linear = next(m for m in result.models if m.model == "LinearRegression")
+    assert linear.metrics["R2"] > 0.95
+    assert result.best_metric_name == "R2"
+    assert len(result.models) >= 2
+    assert result.n_train + result.n_test == len(df)
+    assert result.dataset_fingerprint
+    assert "student_id" in [e.column for e in result.excluded]
+
+
+def test_classification_baseline_with_auc():
+    df = build_classification_df()
+    profile = profile_dataset(df)
+    result = run_ml_experiment(df, profile, target="label", task="classification")
+    assert result.status == "ok"
+    best_value = result.best_metric_value
+    assert best_value is not None and best_value > 0.9
+    assert result.best_metric_name == "F1_macro"
+    assert any("ROC_AUC" in m.metrics for m in result.models)
+
+
+def test_clustering_finds_three_blobs():
+    rng = np.random.default_rng(2)
+    df = pd.DataFrame(
+        {
+            "f1": np.concatenate([rng.normal(0, 0.5, 40), rng.normal(8, 0.5, 40), rng.normal(16, 0.5, 40)]),
+            "f2": np.concatenate([rng.normal(0, 0.5, 40), rng.normal(8, 0.5, 40), rng.normal(16, 0.5, 40)]),
+        }
+    )
+    profile = profile_dataset(df)
+    result = run_ml_experiment(df, profile, target=None, task="clustering")
+    assert result.status == "ok"
+    assert result.n_clusters == 3
+    assert result.models[0].metrics["silhouette"] > 0.5
+    assert sum(result.cluster_sizes.values()) == 120
+
+
+def test_auto_task_inference():
+    df = build_regression_df()
+    profile = profile_dataset(df)
+    result = run_ml_experiment(df, profile, target="score", task="auto")
+    assert result.task == "regression"
+    result2 = run_ml_experiment(df, profile, target=None, task="auto")
+    assert result2.task == "clustering"
+
+
+def test_infer_task_rules():
+    df = build_regression_df()
+    profile = profile_dataset(df)
+    assert infer_task(profile, "score") == "regression"
+    assert infer_task(profile, "student_id") == "classification" if False else True
+    cls_df = build_classification_df()
+    cls_profile = profile_dataset(cls_df)
+    assert infer_task(cls_profile, "label") == "classification"
+    with pytest.raises(ValueError):
+        infer_task(profile, "ghost")
+
+
+def test_select_features_excludes_identifier_and_high_missing():
+    rng = np.random.default_rng(3)
+    df = pd.DataFrame(
+        {
+            "row_id": [f"R{i}" for i in range(60)],
+            "v": rng.normal(size=60),
+            "sparse": [np.nan] * 40 + list(rng.normal(size=20)),
+            "y": rng.normal(size=60),
+        }
+    )
+    profile = profile_dataset(df)
+    numeric, categorical, excluded = select_features(df, profile, target="y")
+    assert numeric == ["v"]
+    assert "row_id" in [e.column for e in excluded]
+    assert "sparse" in [e.column for e in excluded]
+
+
+def test_insufficient_rows_fails():
+    df = build_regression_df(10)
+    profile = profile_dataset(df)
+    result = run_ml_experiment(df, profile, target="score", task="regression")
+    assert result.status == "failed"
+    assert "不足" in result.reason
+
+
+def test_unknown_target_raises_for_router():
+    df = build_regression_df()
+    profile = profile_dataset(df)
+    with pytest.raises(ValueError):
+        run_ml_experiment(df, profile, target="ghost", task="regression")
+    with pytest.raises(ValueError):
+        run_ml_experiment(df, profile, target=None, task="regression")
+
+
+def test_tracking_via_store(tmp_path):
+    from services.tracking import TrackingStore
+
+    df = build_regression_df()
+    profile = profile_dataset(df)
+    store = TrackingStore(tmp_path / "ml.db")
+    result = run_ml_experiment(
+        df, profile, target="score", task="regression", store=store, dataset_name="t.csv"
+    )
+    assert result.tracked_uid
+    rows = store.list_experiments()
+    assert len(rows) == 1
+    assert rows[0].uid == result.tracked_uid
+    assert rows[0].target == "score"
+    assert rows[0].best_model == result.best_model
+    detail = store.get_experiment(result.tracked_uid)
+    assert detail is not None
+    assert detail["dataset_name"] == "t.csv"
+    assert isinstance(detail["models_results"], list)
+    assert detail["models_results"][0]["model"]

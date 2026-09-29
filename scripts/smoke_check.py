@@ -92,6 +92,22 @@ def main() -> None:
         results.append(
             f"api report md={len(report['markdown'])} chars html={len(report['html'])} chars"
         )
+        ml = post_csv(
+            "/api/ml-experiment",
+            {"target": "final_score", "task": "regression", "dataset_name": "student_performance.csv"},
+        )
+        assert ml["status"] == "ok", ml
+        results.append(
+            f"api ml best={ml['best_model']} {ml['best_metric_name']}={ml['best_metric_value']} "
+            f"uid={ml['tracked_uid']}"
+        )
+        import json as _json
+
+        req = urllib.request.Request("http://127.0.0.1:8011/api/experiments?limit=5")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            listed = _json.loads(resp.read().decode("utf-8"))
+        assert any(e["uid"] == ml["tracked_uid"] for e in listed), listed
+        results.append(f"api experiments listed={len(listed)}")
     finally:
         uvicorn_proc.terminate()
 

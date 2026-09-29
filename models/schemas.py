@@ -2,7 +2,7 @@
 """数据画像相关的 Pydantic 模型。"""
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -140,6 +140,52 @@ class ReportBundle(BaseModel):
     markdown: str
     html: str
     filename_base: str
+
+
+class ExcludedFeature(BaseModel):
+    column: str
+    reason: str
+
+
+class MLModelResult(BaseModel):
+    model: str
+    params: dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, float] = Field(default_factory=dict)
+    train_seconds: float = 0.0
+
+
+class MLExperimentResult(BaseModel):
+    status: Literal["ok", "failed"]
+    reason: str = ""
+    task: Literal["regression", "classification", "clustering"]
+    target: Optional[str] = None
+    features_numeric: list[str] = Field(default_factory=list)
+    features_categorical: list[str] = Field(default_factory=list)
+    excluded: list[ExcludedFeature] = Field(default_factory=list)
+    n_train: int = 0
+    n_test: int = 0
+    n_clusters: Optional[int] = None
+    cluster_sizes: dict[str, int] = Field(default_factory=dict)
+    models: list[MLModelResult] = Field(default_factory=list)
+    best_model: Optional[str] = None
+    best_metric_name: str = ""
+    best_metric_value: Optional[float] = None
+    dataset_fingerprint: str = ""
+    tracked_uid: str = ""
+    runtime_seconds: float = 0.0
+
+
+class TrackedExperiment(BaseModel):
+    uid: str
+    created_at: str
+    kind: str
+    task: str
+    target: Optional[str] = None
+    dataset_name: str
+    n_rows: int
+    best_model: Optional[str] = None
+    best_metric_name: Optional[str] = None
+    best_metric_value: Optional[float] = None
 
 
 TYPE_CN = {

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""AI Data Research Lab — Streamlit 前端（画像 → 研究问题 → 实验计划）。"""
+"""AI Data Research Lab — Streamlit 前端（分析流程 / ML 实验室 / 实验追踪）。"""
 from __future__ import annotations
 
 import json
@@ -8,13 +8,15 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from models.schemas import ExperimentPlan, ExperimentRecord, ProfileReport, TYPE_CN
+from models.schemas import ExperimentPlan, ExperimentRecord, MLExperimentResult, ProfileReport, TYPE_CN
 from services.executor import run_experiment
 from services.llm import LLMError, get_llm_client
+from services.ml_lab import run_ml_experiment
 from services.planner import generate_experiment_plan
 from services.profiler import profile_dataset
 from services.report import build_report
 from services.research_questions import generate_research_questions
+from services.tracking import TrackingStore
 from utils.charts import correlation_heatmap, result_figure
 from utils.io import read_tabular
 
@@ -33,6 +35,7 @@ st.markdown(
 
 SAMPLE_PATH = Path(__file__).resolve().parent / "data" / "samples" / "student_performance.csv"
 LEVEL_ICON = {"critical": "🔴", "warning": "🟡", "info": "🔵"}
+TASK_CN = {"regression": "回归", "classification": "分类", "clustering": "聚类"}
 
 
 def load_source() -> tuple[pd.DataFrame | None, str | None]:
@@ -86,29 +89,7 @@ def render_result_chart(df: pd.DataFrame, plan: ExperimentPlan, result) -> None:
         st.pyplot(fig)
 
 
-def main() -> None:
-    st.title("AI Data Research Lab")
-    st.caption("第一步 · Dataset Profiler —— 分析开始前，先把数据看清楚")
-
-    df, err = load_source()
-    if err:
-        st.error(err)
-    if df is None:
-        st.info("在左侧上传 CSV / Excel，或勾选示例数据开始。")
-        st.stop()
-
-    try:
-        report = profile_dataset(df)
-    except ValueError as exc:
-        st.error(f"无法生成画像：{exc}")
-        st.stop()
-
-    data_sig = (report.dataset.n_rows, report.dataset.n_cols, report.dataset.missing_cells)
-    if st.session_state.get("data_sig") != data_sig:
-        st.session_state["data_sig"] = data_sig
-        for key in ("rqs", "plan", "result", "history", "report"):
-            st.session_state.pop(key, None)
-
+def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
     d = report.dataset
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("行数", f"{d.n_rows:,}")
@@ -117,7 +98,7 @@ def main() -> None:
     m4.metric("重复行", f"{d.duplicate_rows:,}")
     m5.metric("内存占用", f"{d.memory_mb:.2f} MB")
 
-    st.subheader("数据质量提示")
+    st.subheader("第一步 · 数据质量提示")
     if report.warnings:
         for w in report.warnings:
             st.markdown(f"{LEVEL_ICON[w.level]} `{w.code}` — {w.message}")
@@ -311,6 +292,131 @@ def main() -> None:
         )
         with st.expander("报告预览（Markdown）", expanded=False):
             st.markdown(rep["md"])
+
+
+def render_ml_lab(df: pd.DataFrame, report: ProfileReport) -> None:
+    st.subheader("ML 实验室 · 多模型基线对比")
+    st.caption(
+        "自动选择特征（排除标识符与高缺失列），80/20 划分（随机种子 42，可复现），"
+        "多模型真实训练；每次运行写入实验追踪库。不选目标即为聚类模式。"
+    )
+    supervised_cols = [
+        c.name for c in report.columns if c.type in ("numeric", "categorical", "boolean")
+    ]
+    options = ["（无目标 · 聚类模式）"] + supervised_cols
+    col_a, col_b = st.columns(2)
+    sel_target = col_a.selectbox("目标变量", options, index=0, key="ml_target")
+    sel_task = col_b.selectbox(
+        "任务", ["auto", "regression", "classification", "clustering"], index=0, key="ml_task"
+    )
+    target = None if sel_target.startswith("（") else sel_target
+    if st.button("运行 ML 基线实验", type="primary", key="run_ml"):
+        with st.spinner("正在训练与评估模型…"):
+            try:
+                st.session_state["ml_result"] = run_ml_experiment(
+                    df,
+                    report,
+                    target=target,
+                    task=sel_task,
+                    store=TrackingStore(),
+                    dataset_name=st.session_state.get("dataset_name", "dataset"),
+                )
+            except ValueError as exc:
+                st.error(f"无法运行：{exc}")
+                st.session_state.pop("ml_result", None)
+    result: MLExperimentResult | None = st.session_state.get("ml_result")
+    if result is None:
+        return
+    if result.status != "ok":
+        st.warning(f"实验未完成：{result.reason}")
+        return
+    st.success(
+        f"完成：最佳模型 {result.best_model}（{result.best_metric_name} = "
+        f"{result.best_metric_value}）· 追踪 uid：{result.tracked_uid}"
+    )
+    meta1, meta2, meta3, meta4 = st.columns(4)
+    meta1.metric("任务", TASK_CN.get(result.task, result.task))
+    if result.task == "clustering":
+        meta2.metric("簇数 k", result.n_clusters)
+        meta3.metric("数值特征", len(result.features_numeric))
+        meta4.metric("数据指纹", result.dataset_fingerprint[:8])
+    else:
+        meta2.metric("训练 / 测试", f"{result.n_train} / {result.n_test}")
+        meta3.metric(
+            "特征",
+            f"数值 {len(result.features_numeric)} + 类别 {len(result.features_categorical)}",
+        )
+        meta4.metric("数据指纹", result.dataset_fingerprint[:8])
+    metrics_df = pd.DataFrame(
+        [
+            {"模型": m.model, **{k: round(v, 4) for k, v in m.metrics.items()}, "耗时(秒)": m.train_seconds}
+            for m in result.models
+        ]
+    )
+    st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+    if result.task == "clustering" and result.cluster_sizes:
+        st.caption("簇规模：" + "、".join(f"{k}：{v}" for k, v in result.cluster_sizes.items()))
+    if result.excluded:
+        st.caption("已排除：" + "；".join(f"{e.column}（{e.reason}）" for e in result.excluded))
+
+
+def render_tracking() -> None:
+    st.subheader("实验追踪")
+    st.caption(
+        "ML 实验自动入库（SQLite：`data/tracking/experiments.db`）——记录数据指纹、特征集、"
+        "模型、超参、指标与时间戳，可跨数据集对比。"
+    )
+    rows = TrackingStore().list_experiments(30)
+    if not rows:
+        st.info("暂无实验记录——到「ML 实验室」运行一次实验即可入库。")
+        return
+    table = pd.DataFrame([t.model_dump() for t in rows]).rename(
+        columns={
+            "uid": "UID",
+            "created_at": "时间",
+            "kind": "类型",
+            "task": "任务",
+            "target": "目标",
+            "dataset_name": "数据集",
+            "n_rows": "行数",
+            "best_model": "最佳模型",
+            "best_metric_name": "最佳指标",
+            "best_metric_value": "最佳值",
+        }
+    )
+    st.dataframe(table, use_container_width=True, hide_index=True)
+
+
+def main() -> None:
+    st.title("AI Data Research Lab")
+    st.caption("从一份 CSV 到一份可复现的研究报告 —— 所有数字来自真实执行的代码")
+
+    df, err = load_source()
+    if err:
+        st.error(err)
+    if df is None:
+        st.info("在左侧上传 CSV / Excel，或勾选示例数据开始。")
+        st.stop()
+
+    try:
+        report = profile_dataset(df)
+    except ValueError as exc:
+        st.error(f"无法生成画像：{exc}")
+        st.stop()
+
+    data_sig = (report.dataset.n_rows, report.dataset.n_cols, report.dataset.missing_cells)
+    if st.session_state.get("data_sig") != data_sig:
+        st.session_state["data_sig"] = data_sig
+        for key in ("rqs", "plan", "result", "history", "report", "ml_result"):
+            st.session_state.pop(key, None)
+
+    tab_flow, tab_ml, tab_track = st.tabs(["① 分析流程", "② ML 实验室", "③ 实验追踪"])
+    with tab_flow:
+        render_flow(df, report)
+    with tab_ml:
+        render_ml_lab(df, report)
+    with tab_track:
+        render_tracking()
 
 
 if __name__ == "__main__":

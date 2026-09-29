@@ -227,3 +227,44 @@ def test_report_endpoint_defaults(override_llm):
     assert resp.status_code == 200
     body = resp.json()
     assert body["filename_base"] == "t"
+
+
+def test_ml_experiment_and_listing(override_llm, tmp_path):
+    from routers.ml import get_tracking_store
+    from services.tracking import TrackingStore
+
+    override_llm(None)
+    app.dependency_overrides[get_tracking_store] = lambda: TrackingStore(tmp_path / "t.db")
+    try:
+        rows = []
+        for i in range(40):
+            x = i / 10
+            rows.append(f"{x:.2f},{2 * x + 1:.2f}")
+        csv_data = ("x,y\n" + "\n".join(rows)).encode("utf-8")
+        resp = client.post(
+            "/api/ml-experiment",
+            files={"file": ("lin.csv", csv_data, "text/csv")},
+            data={"target": "y", "task": "regression", "dataset_name": "lin.csv"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["task"] == "regression"
+        assert body["tracked_uid"]
+        assert body["dataset_fingerprint"]
+        listed = client.get("/api/experiments")
+        assert listed.status_code == 200
+        assert any(e["uid"] == body["tracked_uid"] for e in listed.json())
+    finally:
+        app.dependency_overrides.pop(get_tracking_store, None)
+
+
+def test_ml_experiment_bad_task(override_llm):
+    override_llm(None)
+    resp = client.post(
+        "/api/ml-experiment",
+        files={"file": ("t.csv", CSV, "text/csv")},
+        data={"task": "sorcery"},
+    )
+    assert resp.status_code == 422
+    assert "未知任务" in resp.json()["detail"]

@@ -7,7 +7,9 @@ AI 只负责提出计划与解释结果 —— 所有数字来自真实执行的
 
 ## 当前阶段
 
-**Phase 1 MVP 完成（v0.2.0）：画像 → 研究问题 → 实验计划 → 真实执行 → 研究报告**
+**Phase 2 进行中（v0.3.0）：ML 实验室 + Experiment Tracking**
+
+*Phase 1 MVP（v0.2.0）：画像 → 研究问题 → 实验计划 → 真实执行 → 研究报告*
 
 *Week 1 — Dataset Profiler*（纯确定性分析，不依赖 LLM）
 
@@ -48,6 +50,19 @@ AI 只负责提出计划与解释结果 —— 所有数字来自真实执行的
 
 已交付接口：`POST /api/profile`、`POST /api/research-questions`、`POST /api/experiment-plan`、`POST /api/execute-experiment`、`POST /api/report`
 
+*Phase 2 — ML 基线 + Experiment Tracking（v0.3.0）*
+
+- **ML 实验室**：回归 / 分类 / 聚类多模型自动对比——LinearRegression、LogisticRegression、RandomForest、XGBoost、LightGBM（后两者按可用性自动启用）
+- 特征守门：自动排除标识符列、缺失率 >50% 列、时间列；类别列独热编码（低频归并为 other），数值列中位数填充 + 标准化
+- 任务自动推断：数值目标 → 回归，类别目标 → 分类，无目标 → 聚类（KMeans，轮廓系数自动选 k∈[2,5]）
+- 指标：MAE / RMSE / R²，Accuracy / Precision / Recall / F1（macro）/ 二分类 ROC-AUC，silhouette / inertia
+- 固定随机种子 42、分层划分，结果可复现；训练耗时分模型记录
+- **Experiment Tracking**：每次实验写入 SQLite（数据指纹 sha256 前 16 位、特征集、模型、超参、指标、耗时、时间戳），`GET /api/experiments` 列表对比
+- Streamlit 改为三标签页：① 分析流程 ② ML 实验室 ③ 实验追踪
+- 新增接口：`POST /api/ml-experiment`、`GET /api/experiments`
+
+全部接口：`POST /api/profile`、`POST /api/research-questions`、`POST /api/experiment-plan`、`POST /api/execute-experiment`、`POST /api/report`、`POST /api/ml-experiment`、`GET /api/experiments`
+
 ## LLM 配置（可选）
 
 ```bash
@@ -74,8 +89,8 @@ python -m venv .venv
 main.py / app.py          FastAPI 与 Streamlit 入口
 routers/                  API 路由（profile / research）
 models/                   Pydantic 模型
-services/                 核心逻辑（profiler / llm / research_questions / planner / executor / report）
-utils/                    文件读取、图表、JSON 提取、示例数据
+services/                 核心逻辑（profiler / llm / research_questions / planner / executor / report / ml_lab / tracking）
+utils/                    文件读取、图表、上传加载、JSON 提取、示例数据
 scripts/                  示例数据生成与冒烟脚本
 tests/                    pytest 测试
 PROJECT_BRIEF.md          立项书与三阶段路线
