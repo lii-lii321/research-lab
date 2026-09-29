@@ -44,6 +44,7 @@ def test_app_agent_flow(tmp_path, monkeypatch):
     assert not at.exception
     at.text_input(key="agent_task").set_value("研究影响学生成绩的因素")
     at.slider(key="agent_max").set_value(2)
+    at.checkbox(key="agent_lit").set_value(False)
     at.button(key="agent_run").click()
     at.run()
     assert not at.exception

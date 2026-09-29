@@ -113,9 +113,11 @@ def main() -> None:
             {"task_description": "研究影响学生成绩的因素", "max_questions": "2", "dataset_name": "student_performance.csv"},
         )
         assert agent["status"] == "ok", agent.get("steps")
+        lit = next((s for s in agent["steps"] if s["name"] == "文献检索"), None)
         results.append(
             f"api agent steps={len(agent['steps'])} questions={len(agent['questions'])} "
-            f"records={len(agent['records'])} report_md={len(agent['report_markdown'])}"
+            f"records={len(agent['records'])} lit={lit['status'] if lit else 'off'} "
+            f"refs={len(agent.get('references', []))} report_md={len(agent['report_markdown'])}"
         )
     finally:
         uvicorn_proc.terminate()

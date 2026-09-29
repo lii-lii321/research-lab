@@ -196,6 +196,14 @@ class AgentStep(BaseModel):
     seconds: float = 0.0
 
 
+class PaperRef(BaseModel):
+    title: str
+    authors: list[str] = Field(default_factory=list)
+    year: str = ""
+    summary: str = ""
+    url: str = ""
+
+
 class AgentRunResult(BaseModel):
     status: Literal["ok", "failed"]
     reason: str = ""
@@ -204,6 +212,7 @@ class AgentRunResult(BaseModel):
     questions: list[ResearchQuestion] = Field(default_factory=list)
     records: list[ExperimentRecord] = Field(default_factory=list)
     ml_result: Optional[MLExperimentResult] = None
+    references: list[PaperRef] = Field(default_factory=list)
     report_markdown: str = ""
     report_html: str = ""
     filename_base: str = "report"

@@ -8,13 +8,15 @@ from datetime import datetime
 from models.schemas import (
     ExperimentRecord,
     MLExperimentResult,
+    PaperRef,
     ProfileReport,
     ResearchQuestion,
     TYPE_CN,
 )
 from services.executor import METHOD_CN, format_p
+from services.literature import snippet
 
-GENERATOR = "AI Data Research Lab v0.4.0"
+GENERATOR = "AI Data Research Lab v0.5.0"
 
 LEVEL_ICON = {"critical": "🔴", "warning": "🟡", "info": "🔵"}
 
@@ -81,6 +83,7 @@ def build_markdown(
     records: list[ExperimentRecord],
     generated: str,
     ml_result: MLExperimentResult | None = None,
+    references: list[PaperRef] | None = None,
 ) -> str:
     section = {"n": 0}
 
@@ -181,6 +184,19 @@ def build_markdown(
             if ml_result.excluded:
                 excluded_desc = "；".join(f"{e.column}（{e.reason}）" for e in ml_result.excluded)
                 lines.append(f"- 已排除特征：{_md(excluded_desc)}")
+    if references:
+        lines += [
+            "",
+            heading("相关工作（文献引用）"),
+            "",
+            "> 检索词来自数据字段与研究问题，由 arXiv 关键词检索得到，非系统性文献综述，仅作入口性参考。",
+            "",
+        ]
+        for i, p in enumerate(references, 1):
+            authors = "、".join(p.authors[:3]) + ("等" if len(p.authors) > 3 else "")
+            lines.append(
+                f"{i}. **{_md(p.title)}** — {_md(authors)}（{p.year}）。{_md(snippet(p.summary))} [链接]({p.url})"
+            )
     lines += ["", heading("结论与局限"), ""]
     ok_records = [r for r in records if r.result.status == "ok"]
     if ok_records:
@@ -218,6 +234,7 @@ def build_html(
     records: list[ExperimentRecord],
     generated: str,
     ml_result: MLExperimentResult | None = None,
+    references: list[PaperRef] | None = None,
 ) -> str:
     section = {"n": 0}
 
@@ -359,6 +376,19 @@ def build_html(
             if ml_result.excluded:
                 excluded_desc = "；".join(f"{e.column}（{e.reason}）" for e in ml_result.excluded)
                 parts.append(f"<p class=\"meta\">已排除特征：{_esc(excluded_desc)}</p>")
+    if references:
+        parts.append(heading("相关工作（文献引用）"))
+        parts.append(
+            "<p class=\"meta\">检索词来自数据字段与研究问题，由 arXiv 关键词检索得到，"
+            "非系统性文献综述，仅作入口性参考。</p><ol>"
+        )
+        for p in references:
+            authors = "、".join(p.authors[:3]) + ("等" if len(p.authors) > 3 else "")
+            parts.append(
+                f"<li><b>{_esc(p.title)}</b> — {_esc(authors)}（{_esc(p.year)}）。"
+                f"{_esc(snippet(p.summary))} <a href=\"{_esc(p.url)}\">[abs]</a></li>"
+            )
+        parts.append("</ol>")
     parts.append(heading("结论与局限"))
     ok_records = [r for r in records if r.result.status == "ok"]
     if ok_records:
@@ -391,9 +421,10 @@ def build_report(
     questions: list[ResearchQuestion],
     records: list[ExperimentRecord],
     ml_result: MLExperimentResult | None = None,
+    references: list[PaperRef] | None = None,
 ) -> tuple[str, str]:
     generated = datetime.now().strftime("%Y-%m-%d %H:%M")
     return (
-        build_markdown(profile, dataset_name, questions, records, generated, ml_result),
-        build_html(profile, dataset_name, questions, records, generated, ml_result),
+        build_markdown(profile, dataset_name, questions, records, generated, ml_result, references),
+        build_html(profile, dataset_name, questions, records, generated, ml_result, references),
     )

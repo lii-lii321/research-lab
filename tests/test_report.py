@@ -114,3 +114,26 @@ def test_build_report_pair_and_filename_friendly():
     _df, profile, question, record = build_world()
     md, html = build_report(profile, "student_performance.csv", [question], [record])
     assert md and html
+
+
+def test_report_with_references_section():
+    from models.schemas import PaperRef
+
+    _df, profile, question, record = build_world()
+    refs = [
+        PaperRef(
+            title="Predicting student performance with ML",
+            authors=["Alice Wang", "Bob Li", "Carol Zhang", "Dave Chen"],
+            year="2024",
+            summary="A study on score prediction. " * 20,
+            url="http://arxiv.org/abs/2401.0001v1",
+        )
+    ]
+    md, html = build_report(profile, "t.csv", [question], [record], references=refs)
+    assert "相关工作（文献引用）" in md
+    assert "arXiv 关键词检索" in md
+    assert "Predicting student performance with ML" in md
+    assert "（2024）" in md and "等" in md  # 第四作者折叠为"等"
+    assert "…" in md  # 摘要截断
+    assert "相关工作（文献引用）" in html
+    assert "<a href=" in html and "2401.0001" in html

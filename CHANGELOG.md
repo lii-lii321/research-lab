@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 - 2026-09-29
+
+- Paper RAG：`services/literature.py` —— 从目标候选与研究问题自动构造检索词，arXiv API 关键词检索 + 词面重排（零嵌入、零 Key），返回 top-N 相关文献
+- Agent 新增"文献检索"步骤（时间线可见、失败优雅降级不阻断报告），报告新增"相关工作（文献引用）"章节（MD+HTML，摘要截断、作者折叠、来源声明"非系统性综述"）
+- `POST /api/agent/run` 新增 `with_literature` 参数；Streamlit ④ 自动研究页新增开关与引用文献列表
+- 测试 102 → 114（fetch 可注入，全部离线可跑；真实 arXiv 由冒烟脚本覆盖）
+- 版本口径：文献检索需联网，无网络时自动跳过该步骤并在时间线标注原因
+
 ## 0.4.0 - 2026-09-29
 
 - Research Agent：一句话研究任务自动走完 画像 → 研究问题 → 统计实验 → ML 基线 → 研究报告 全流程，带执行时间线（`POST /api/agent/run`，Streamlit ④ 自动研究页）

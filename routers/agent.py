@@ -19,6 +19,7 @@ async def agent_run(
     file: UploadFile,
     task_description: str = Form("自动研究"),
     max_questions: int = Form(3),
+    with_literature: bool = Form(True),
     dataset_name: str = Form(""),
     store: Annotated[Optional[TrackingStore], Depends(get_tracking_store)] = None,
     client: Annotated[Optional[LLMClient], Depends(get_llm_client)] = None,
@@ -34,4 +35,5 @@ async def agent_run(
         client,
         store,
         name,
+        with_literature,
     )

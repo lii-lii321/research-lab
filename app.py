@@ -427,9 +427,10 @@ def render_agent(df: pd.DataFrame, report: ProfileReport) -> None:
     )
     task = st.text_input("研究任务描述", value="研究影响学生成绩的关键因素", key="agent_task")
     max_q = st.slider("最多研究问题数", 1, 5, 3, key="agent_max")
+    with_lit = st.checkbox("检索相关文献（arXiv，需联网）", value=True, key="agent_lit")
     client = get_llm_client()
     if st.button("启动自动研究", type="primary", key="agent_run"):
-        with st.spinner("Agent 运行中：画像 → 研究问题 → 统计实验 → ML 基线 → 报告…"):
+        with st.spinner("Agent 运行中：画像 → 研究问题 → 统计实验 → ML 基线 → 文献 → 报告…"):
             st.session_state["agent_result"] = run_research_agent(
                 df,
                 report,
@@ -438,6 +439,7 @@ def render_agent(df: pd.DataFrame, report: ProfileReport) -> None:
                 client=client,
                 store=TrackingStore(),
                 dataset_name=st.session_state.get("dataset_name", "dataset"),
+                enable_literature=with_lit,
             )
     result = st.session_state.get("agent_result")
     if result is None:
@@ -456,6 +458,10 @@ def render_agent(df: pd.DataFrame, report: ProfileReport) -> None:
         icon = {"ok": "✅", "failed": "⚠️"}
         for s in result.steps:
             st.markdown(f"- {icon[s.status]} **{s.name}**（{s.seconds}s）— {s.detail}")
+    if result.references:
+        with st.expander(f"引用文献（{len(result.references)} 篇）", expanded=False):
+            for p in result.references:
+                st.markdown(f"- **{p.title}**（{p.year}）— {p.url}")
     if result.report_markdown:
         dl_md, dl_html = st.columns(2)
         dl_md.download_button(
@@ -496,7 +502,7 @@ def main() -> None:
     data_sig = (report.dataset.n_rows, report.dataset.n_cols, report.dataset.missing_cells)
     if st.session_state.get("data_sig") != data_sig:
         st.session_state["data_sig"] = data_sig
-        for key in ("rqs", "plan", "result", "history", "report", "ml_result"):
+        for key in ("rqs", "plan", "result", "history", "report", "ml_result", "agent_result"):
             st.session_state.pop(key, None)
 
     tab_flow, tab_ml, tab_track, tab_agent = st.tabs(

@@ -9,10 +9,12 @@ from models.schemas import (
     AgentStep,
     ExperimentRecord,
     MLExperimentResult,
+    PaperRef,
     ProfileReport,
     ResearchQuestion,
 )
 from services.executor import run_experiment
+from services.literature import search_related
 from services.llm import LLMClient
 from services.ml_lab import run_ml_experiment
 from services.planner import generate_experiment_plan
@@ -29,12 +31,14 @@ def run_research_agent(
     client: LLMClient | None = None,
     store: TrackingStore | None = None,
     dataset_name: str = "dataset",
+    enable_literature: bool = True,
 ) -> AgentRunResult:
     started = time.perf_counter()
     steps: list[AgentStep] = []
     questions: list[ResearchQuestion] = []
     records: list[ExperimentRecord] = []
     ml_result: MLExperimentResult | None = None
+    references: list[PaperRef] = []
     report_md = report_html = ""
     filename_base = "report"
 
@@ -93,10 +97,18 @@ def run_research_agent(
             raise RuntimeError(f"ML 基线未完成：{ml_result.reason}")
         return f"ML 最佳模型 {ml_result.best_model}（{ml_result.best_metric_name} = {ml_result.best_metric_value}）"
 
+    def do_literature() -> str:
+        nonlocal references
+        references = search_related(profile, questions)
+        if not references:
+            raise RuntimeError("arXiv 未返回相关文献（网络不可用或无匹配）")
+        titles = "；".join(p.title[:40] for p in references)
+        return f"检索到 {len(references)} 篇相关文献：{titles}…"
+
     def do_report() -> str:
         nonlocal report_md, report_html, filename_base
         report_md, report_html = build_report(
-            profile, dataset_name, questions, records, ml_result
+            profile, dataset_name, questions, records, ml_result, references
         )
         filename_base = dataset_name.rsplit(".", 1)[0] or "report"
         return f"报告生成（Markdown {len(report_md)} 字符 / HTML {len(report_html)} 字符）"
@@ -107,6 +119,8 @@ def run_research_agent(
     if ok_questions and questions:
         step("统计实验", do_experiments)
     step("ML 基线", do_ml)
+    if enable_literature:
+        step("文献检索", do_literature)
     step("研究报告", do_report)
 
     status = "ok" if (questions and report_md) else "failed"
@@ -119,6 +133,7 @@ def run_research_agent(
         questions=questions,
         records=records,
         ml_result=ml_result,
+        references=references,
         report_markdown=report_md,
         report_html=report_html,
         filename_base=filename_base,

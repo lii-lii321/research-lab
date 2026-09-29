@@ -37,8 +37,9 @@ OUTLIER_PREVIEW_N = 10
 MAX_CORR_PAIRS = 10
 
 _ID_NAME_HINTS = ("id", "no", "number", "code", "uuid")
-_TARGET_NUMERIC_HINTS = ("score", "price", "amount", "revenue", "target", "y")
+_TARGET_NUMERIC_HINTS = ("score", "price", "amount", "revenue", "target")
 _TARGET_CATEGORICAL_HINTS = ("label", "target", "is_", "has_", "churn", "default", "passed", "fail")
+_TARGET_EXACT = ("y",)
 
 
 def _round(x, nd: int = 4):
@@ -175,14 +176,30 @@ def _top_correlations(df: pd.DataFrame, columns: list[ColumnProfile]) -> list[Co
 
 
 def _suggest_targets(columns: list[ColumnProfile]) -> list[TargetCandidate]:
-    out: list[TargetCandidate] = []
-    for c in columns:
+    hits: list[tuple[int, int, TargetCandidate]] = []
+    for idx, c in enumerate(columns):
         lname = c.name.lower()
-        if c.type == "numeric" and any(h in lname for h in _TARGET_NUMERIC_HINTS):
-            out.append(TargetCandidate(column=c.name, reason="数值型且命名含常见目标词"))
+        matched = None
+        if c.type == "numeric" and (
+            any(h in lname for h in _TARGET_NUMERIC_HINTS) or lname in _TARGET_EXACT
+        ):
+            matched = "数值型且命名含常见目标词"
         elif c.type in ("categorical", "boolean") and any(h in lname for h in _TARGET_CATEGORICAL_HINTS):
-            out.append(TargetCandidate(column=c.name, reason="低基数类别型且命名含常见标签词"))
-    return out[:5]
+            matched = "低基数类别型且命名含常见标签词"
+        if matched is None:
+            continue
+        # 词尾命中（如 final_score 之于 score）通常比词中命中更接近"结果变量"
+        priority = (
+            0
+            if any(
+                lname.endswith(h)
+                for h in _TARGET_NUMERIC_HINTS + _TARGET_CATEGORICAL_HINTS
+            )
+            else 1
+        )
+        hits.append((priority, idx, TargetCandidate(column=c.name, reason=matched)))
+    hits.sort(key=lambda t: (t[0], t[1]))
+    return [t[2] for t in hits[:5]]
 
 
 def _collect_warnings(

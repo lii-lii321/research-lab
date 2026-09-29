@@ -289,7 +289,12 @@ def test_agent_run_rule_mode(override_llm, tmp_path):
         resp = client.post(
             "/api/agent/run",
             files={"file": ("lin.csv", csv_data, "text/csv")},
-            data={"task_description": "研究影响成绩的因素", "max_questions": "2", "dataset_name": "lin.csv"},
+            data={
+                "task_description": "研究影响成绩的因素",
+                "max_questions": "2",
+                "dataset_name": "lin.csv",
+                "with_literature": "false",
+            },
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -297,6 +302,7 @@ def test_agent_run_rule_mode(override_llm, tmp_path):
         assert [s["name"] for s in body["steps"]] == [
             "数据画像", "研究问题", "统计实验", "ML 基线", "研究报告",
         ]
+        assert body["references"] == []
         assert body["questions"] and all(q["source"] == "rule" for q in body["questions"])
         assert "ML 基线实验" in body["report_markdown"]
         listed = client.get("/api/experiments")
