@@ -2,6 +2,11 @@
 
 > 2026-09-28 定盘。repo 名建议 `research-lab`。
 > 核心原则：AI 只负责"提出计划、解释结果"，所有数字必须来自真实执行的代码。
+>
+> **2026-09-30 修订**：执行策略已从原稿的"LLM 生成代码 + 受限子进程沙箱"改为
+> **方法白名单 + 确定性 scipy 分派**，决策记录见
+> [docs/adr-0001-method-whitelist-over-codegen-sandbox.md](docs/adr-0001-method-whitelist-over-codegen-sandbox.md)。
+> 下文涉及"受限子进程/Docker 沙箱"的表述为原稿保留，以 ADR 为准。
 
 ## 一句话
 

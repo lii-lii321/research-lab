@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 - 2026-09-30
+
+- 监督学习基线升级：分层 k 折交叉验证（k=5/3 按样本量自适应，分类按 y 分层），每模型报告 CV 均值±标准差，最佳模型按 CV 均值选取而非单次 holdout；测试数据补噪声避免零噪声并列
+- 统计实验入 tracking 库（kind=stats：方法/变量/α/原始 p/decision/计划来源），Agent 全流程自动入库；每个成功实验附可独立运行的 scipy 复现脚本（`services/repro.py`），嵌入报告"附录：复现脚本"并可单独下载
+- task_description 真正驱动研究问题：LLM 模式作为硬约束写入 prompt 首行；规则模式按任务关键词对问题重排序
+- 计划层加固：方法白名单与执行层单一来源（`RUNNER_METHODS`）、方法-变量类型组合校验（LLM 给 chi2 配两个数值变量会被规则降级并留痕）、偏度感知兜底（|skew|≥2 → 秩方法）
+- 安全与部署加固：上传先查声明大小再读内存（413）、CORS 默认仅本地 Streamlit（`RESEARCH_LAB_CORS` 可覆盖）、compose 仅回环绑定、SQLite 连接超时
+- CI/工具链：新增 smoke job（CI 真实起 uvicorn + Streamlit 做九项探活）；`scripts/smoke_check.py` 跨平台化（当前解释器 + 轮询就绪探测替代固定 sleep）；新增 `scripts/wait_for.py`（仅限回环地址的就绪等待）
+- 文档：README 重构为"问题→机制→架构→上手"一页式；新增 ADR-0001 记录"白名单分派取代代码生成沙箱"的方法学决策；.env.example 与 PROJECT_BRIEF 过时口径修正
+- 测试 124 → 135 全绿 0 跳过
+
 ## 0.5.1 - 2026-09-30
 
 修复独立评审核实的 5 个问题：

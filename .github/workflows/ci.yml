@@ -20,3 +20,18 @@ jobs:
         run: python scripts/generate_sample.py
       - name: Run tests
         run: pytest -q -rs
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Generate sample data
+        run: python scripts/generate_sample.py
+      - name: API and UI smoke (real servers, live probes)
+        run: python scripts/smoke_check.py
