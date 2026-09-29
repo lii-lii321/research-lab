@@ -119,6 +119,8 @@ def test_mannwhitney():
     assert result.status == "ok"
     assert result.decision == "reject_h0"
     assert result.statistic_name == "U"
+    assert result.effect_name == "rank-biserial r"
+    assert result.effect_size is not None and abs(result.effect_size) > 0.9  # 完全分离
 
 
 def test_kruskal():
@@ -135,6 +137,8 @@ def test_kruskal():
     assert result.status == "ok"
     assert result.statistic_name == "H"
     assert result.decision == "reject_h0"
+    assert result.effect_name == "ε²"
+    assert result.effect_size is not None and result.effect_size > 0.1
 
 
 def test_chi2_dependent():
@@ -171,6 +175,40 @@ def test_chi2_small_table_fails():
     result = run_experiment(make_plan("chi2", ["a", "b"]), df)
     assert result.status == "failed"
     assert "2×2" in result.reason
+
+
+def test_fisher_auto_for_sparse_2x2():
+    a = ["X"] * 9 + ["Y"] * 9
+    b = ["P"] * 8 + ["Q"] + ["P"] + ["Q"] * 8
+    df = pd.DataFrame({"a": a, "b": b})
+    result = run_experiment(make_plan("chi2", ["a", "b"]), df)
+    assert result.status == "ok"
+    assert result.extra["test_used"] == "fisher_exact"
+    assert result.statistic_name == "Fisher OR"
+    assert result.effect_name == "Cramér's V"
+    assert result.p_value is not None and 0 <= result.p_value <= 1
+
+
+def test_dense_table_keeps_chi2():
+    df = pd.DataFrame(
+        {
+            "a": ["X"] * 40 + ["Y"] * 40,
+            "b": ["P"] * 30 + ["Q"] * 10 + ["P"] * 10 + ["Q"] * 30,
+        }
+    )
+    result = run_experiment(make_plan("chi2", ["a", "b"]), df)
+    assert result.status == "ok"
+    assert result.extra["test_used"] == "chi2"
+    assert result.statistic_name == "χ²"
+
+
+def test_decision_uses_unrounded_p():
+    """判定读取的是未舍入的 p_value_raw，展示值仍是 4 位舍入。"""
+    df = pd.DataFrame({"x": np.arange(40.0), "y": np.arange(40.0) + np.random.default_rng(1).normal(0, 2, 40)})
+    result = run_experiment(make_plan("pearson", ["x", "y"], alpha=0.05), df)
+    assert result.p_value_raw is not None
+    assert result.decision == ("reject_h0" if result.p_value_raw < 0.05 else "fail_to_reject_h0")
+    assert result.p_value == round(result.p_value_raw, 4)
 
 
 def test_linear_regression_extra():

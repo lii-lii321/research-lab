@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1 - 2026-09-30
+
+修复独立评审核实的 5 个问题：
+
+- 测试真实有效性：CI 构建时先生成示例数据（UI 测试不再在全新检出时整体跳过）、`pytest -rs` 让 skip 透明、ML 流程测试隔离追踪库（不再污染本地实验记录）、删除两条恒真断言（`test_ml_lab.py` 的运算符优先级错误与 `test_agent.py` 的恒真状态断言）
+- 统计严谨性：H0 判定改用未舍入的原始 p 值（真实 p=0.04996 不再被舍入成 0.05 而翻转结论，`p_value_raw` 入库）；2×2 稀疏列联表自动切换 Fisher 精确检验（`test_used` 标注实际方法）；Mann-Whitney/Kruskal 补齐 rank-biserial r 与 ε² 效应量；报告结论表新增 Benjamini–Hochberg 校正后 p 列，局限声明注明全部结论为探索性分析，稀疏卡方在结论表标注（稀疏）
+- LLM 客户端补齐单测：非 200、畸形响应、断网、无 Key 四分支 + auto 模式 LLMError 规则回退（此前该层零覆盖）
+- research 三个路由改 `run_in_threadpool`：LLM 调用最长 60 秒不再阻塞事件循环（对齐 agent/ml 路由的既有模式）
+
 ## 0.5.0 - 2026-09-29
 
 - Paper RAG：`services/literature.py` —— 从目标候选与研究问题自动构造检索词，arXiv API 关键词检索 + 词面重排（零嵌入、零 Key），返回 top-N 相关文献

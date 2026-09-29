@@ -93,7 +93,8 @@ def test_infer_task_rules():
     df = build_regression_df()
     profile = profile_dataset(df)
     assert infer_task(profile, "score") == "regression"
-    assert infer_task(profile, "student_id") == "classification" if False else True
+    with pytest.raises(ValueError):
+        infer_task(profile, "student_id")  # 标识符列不能作为监督学习目标
     cls_df = build_classification_df()
     cls_profile = profile_dataset(cls_df)
     assert infer_task(cls_profile, "label") == "classification"

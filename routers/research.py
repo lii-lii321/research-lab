@@ -5,6 +5,7 @@ from pathlib import PurePosixPath, PureWindowsPath
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from pydantic import ValidationError
 
 from models.schemas import (
@@ -30,7 +31,7 @@ async def research_questions(
     client: Annotated[Optional[LLMClient], Depends(get_llm_client)],
 ) -> list[ResearchQuestion]:
     df, report = await load_dataset(file)
-    return generate_research_questions_auto(df, report, client)
+    return await run_in_threadpool(generate_research_questions_auto, df, report, client)
 
 
 @router.post("/experiment-plan", response_model=ExperimentPlan)
@@ -45,7 +46,7 @@ async def experiment_plan(
     variables_list = [v.strip() for v in variables.split(",") if v.strip()]
     rq = ResearchQuestion(id=question_id, question=question, variables=variables_list)
     try:
-        return generate_experiment_plan(rq, report, client)
+        return await run_in_threadpool(generate_experiment_plan, rq, report, client)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
@@ -79,7 +80,7 @@ async def execute_experiment(
         variables=[v.strip() for v in variables.split(",") if v.strip()],
     )
     try:
-        return run_experiment(plan, df, client)
+        return await run_in_threadpool(run_experiment, plan, df, client)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

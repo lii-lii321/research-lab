@@ -61,6 +61,7 @@ def test_markdown_contains_real_numbers_and_structure():
     assert f"{record.result.statistic:.3f}" in md
     assert "scipy" in md and "复现说明" in md
     assert "不构成因果推断" in md
+    assert "探索性分析" in md and "BH" in md  # BH 校正列与多重比较声明
     assert record.result.interpretation in md
     assert ("LLM" in md) if record.result.interpretation_source == "llm" else ("规则模板" in md)
 

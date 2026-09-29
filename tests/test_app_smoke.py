@@ -20,7 +20,8 @@ def test_app_renders_without_exception():
     assert not at.exception
 
 
-def test_app_ml_experiment_flow():
+def test_app_ml_experiment_flow(tmp_path, monkeypatch):
+    monkeypatch.setenv("RESEARCH_LAB_DB", str(tmp_path / "app_ml.db"))
     at = make_app()
     at.run()
     assert not at.exception

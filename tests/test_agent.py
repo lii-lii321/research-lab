@@ -119,7 +119,7 @@ def test_agent_survives_step_failures(tmp_path):
         enable_literature=False,
     )
     failed_steps = [s.name for s in result.steps if s.status == "failed"]
-    assert result.status in ("ok", "failed")
+    assert result.status == "ok"  # 报告始终产出
     assert any("统计实验" in name or "ML 基线" == name for name in failed_steps)
     assert result.report_markdown  # 报告始终产出
 

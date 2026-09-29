@@ -140,7 +140,8 @@ def _run_correlation(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         res = func(x, y)
-    r, p = _round(res.statistic), _round(res.pvalue)
+    raw_p = float(res.pvalue)
+    r, p = _round(res.statistic), _round(raw_p)
     if r is None or p is None:
         return _failed(plan, "变量无变异，无法计算相关系数")
     effect_name = "r²" if plan.method == "pearson" else "ρ²"
@@ -155,6 +156,7 @@ def _run_correlation(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult
         statistic=r,
         statistic_name="r" if plan.method == "pearson" else "ρ",
         p_value=p,
+        p_value_raw=raw_p,
         effect_size=_round(r * r),
         effect_name=effect_name,
     )
@@ -177,14 +179,19 @@ def _run_group_compare(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResu
         stat_name, effect, effect_name = "t", _cohen_d(arrays[0], arrays[1]), "Cohen's d"
     elif plan.method == "mannwhitney":
         res = sps.mannwhitneyu(arrays[0], arrays[1], alternative="two-sided")
-        stat_name, effect, effect_name = "U", None, ""
+        rank_biserial = 1.0 - 2.0 * float(res.statistic) / (arrays[0].size * arrays[1].size)
+        stat_name, effect, effect_name = "U", rank_biserial, "rank-biserial r"
     elif plan.method == "anova":
         res = sps.f_oneway(*arrays)
         stat_name, effect, effect_name = "F", _eta_squared(grouped), "η²"
     else:
         res = sps.kruskal(*arrays)
-        stat_name, effect, effect_name = "H", None, ""
-    stat, p = _round(res.statistic), _round(res.pvalue)
+        k_groups = len(arrays)
+        n_total = int(sum(a.size for a in arrays))
+        epsilon_sq = (float(res.statistic) - k_groups + 1.0) / (n_total - k_groups)
+        stat_name, effect, effect_name = "H", epsilon_sq, "ε²"
+    raw_p = float(res.pvalue)
+    stat, p = _round(res.statistic), _round(raw_p)
     if stat is None or p is None:
         return _failed(plan, "组内数据无变异，检验无法计算")
     return ExperimentResult(
@@ -198,6 +205,7 @@ def _run_group_compare(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResu
         statistic=stat,
         statistic_name=stat_name,
         p_value=p,
+        p_value_raw=raw_p,
         effect_size=_round(effect) if effect is not None else None,
         effect_name=effect_name,
         groups=_group_stats(grouped),
@@ -212,7 +220,8 @@ def _run_paired(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult:
     diff = x - y
     std_diff = diff.std(ddof=1)
     dz = float(diff.mean() / std_diff) if std_diff and not np.isnan(std_diff) else None
-    stat, p = _round(res.statistic), _round(res.pvalue)
+    raw_p = float(res.pvalue)
+    stat, p = _round(res.statistic), _round(raw_p)
     if stat is None or p is None:
         return _failed(plan, "差值无变异，配对检验无法计算")
     return ExperimentResult(
@@ -226,6 +235,7 @@ def _run_paired(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult:
         statistic=stat,
         statistic_name="t",
         p_value=p,
+        p_value_raw=raw_p,
         effect_size=_round(dz) if dz is not None else None,
         effect_name="Cohen's dz" if dz is not None else "",
     )
@@ -240,10 +250,16 @@ def _run_chi2(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult:
         return _failed(
             plan, f"列联表维度不足（当前 {ct.shape[0]}×{ct.shape[1]}，至少需要 2×2）"
         )
-    chi2, p, _dof, expected = sps.chi2_contingency(ct)
+    chi2_stat, p_chi2, _dof, expected = sps.chi2_contingency(ct)
     n = int(ct.values.sum())
-    cramers_v = float(np.sqrt(chi2 / (n * (min(ct.shape) - 1))))
+    cramers_v = float(np.sqrt(chi2_stat / (n * (min(ct.shape) - 1))))
     sparse_rate = float((expected < SPARSE_EXPECTED_N).mean())
+    sparse = bool((expected < SPARSE_EXPECTED_N).any())
+    if sparse and ct.shape == (2, 2):
+        odds_ratio, raw_p = sps.fisher_exact(ct)
+        stat, stat_name, test_used = float(odds_ratio), "Fisher OR", "fisher_exact"
+    else:
+        stat, stat_name, raw_p, test_used = float(chi2_stat), "χ²", float(p_chi2), "chi2"
     result = ExperimentResult(
         experiment_id=plan.experiment_id,
         question_id=plan.question_id,
@@ -252,13 +268,15 @@ def _run_chi2(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult:
         alpha=plan.alpha,
         n_used=n,
         n_dropped=len(df) - n,
-        statistic=_round(chi2),
-        statistic_name="χ²",
-        p_value=_round(p),
+        statistic=_round(stat),
+        statistic_name=stat_name,
+        p_value=_round(raw_p),
+        p_value_raw=raw_p,
         effect_size=_round(cramers_v),
         effect_name="Cramér's V",
         contingency=ct.values.tolist(),
     )
+    result.extra["test_used"] = test_used
     if sparse_rate > SPARSE_RATE:
         result.extra["sparse_expected_rate"] = _round(sparse_rate) or 0.0001
     return result
@@ -269,7 +287,8 @@ def _run_regression(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult:
     if x.size < MIN_PAIRS:
         return _failed(plan, f"有效配对观测不足（{x.size} < {MIN_PAIRS}）")
     res = sps.linregress(x, y)
-    r, p = _round(res.rvalue), _round(res.pvalue)
+    raw_p = float(res.pvalue)
+    r, p = _round(res.rvalue), _round(raw_p)
     if r is None or p is None:
         return _failed(plan, "变量无变异，回归无法计算")
     return ExperimentResult(
@@ -283,6 +302,7 @@ def _run_regression(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult:
         statistic=r,
         statistic_name="r",
         p_value=p,
+        p_value_raw=raw_p,
         effect_size=_round(r * r),
         effect_name="r²",
         extra={
@@ -340,14 +360,19 @@ def rule_interpretation(result: ExperimentResult, plan: ExperimentPlan) -> str:
             f"{result.statistic:.3f}，{p_txt}。{effect}{decision}"
         )
     if plan.method in CHI2_METHODS:
+        if result.extra.get("test_used") == "fisher_exact":
+            method_cn = "Fisher 精确检验（2×2 稀疏表自动切换）"
         rows, cols = (
             (len(result.contingency), len(result.contingency[0])) if result.contingency else (0, 0)
         )
         text = (
-            f"{method_cn}基于 {result.n_used} 个观测（{rows}×{cols} 列联表）：χ² = "
+            f"{method_cn}基于 {result.n_used} 个观测（{rows}×{cols} 列联表）：{result.statistic_name} = "
             f"{result.statistic:.3f}，{p_txt}。{decision}"
         )
-        if result.extra.get("sparse_expected_rate", 0) > SPARSE_RATE:
+        if (
+            result.extra.get("sparse_expected_rate", 0) > SPARSE_RATE
+            and result.extra.get("test_used") != "fisher_exact"
+        ):
             text += "注意：超过 20% 的单元格期望频数小于 5，卡方近似可能不可靠。"
         return text
     return f"{method_cn}：统计量 {result.statistic}，{p_txt}。{decision}"
@@ -397,8 +422,9 @@ def run_experiment(
         result.interpretation = result.reason
         result.interpretation_source = "none"
         return result
-    if result.p_value is not None:
-        result.decision = "reject_h0" if result.p_value < plan.alpha else "fail_to_reject_h0"
+    if result.p_value_raw is not None or result.p_value is not None:
+        raw = result.p_value_raw if result.p_value_raw is not None else result.p_value
+        result.decision = "reject_h0" if raw < plan.alpha else "fail_to_reject_h0"
     if client is not None:
         try:
             result.interpretation = llm_interpretation(result, plan, client)

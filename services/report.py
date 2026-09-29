@@ -16,7 +16,7 @@ from models.schemas import (
 from services.executor import METHOD_CN, format_p
 from services.literature import snippet
 
-GENERATOR = "AI Data Research Lab v0.5.0"
+GENERATOR = "AI Data Research Lab v0.5.1"
 
 LEVEL_ICON = {"critical": "🔴", "warning": "🟡", "info": "🔵"}
 
@@ -28,8 +28,49 @@ LIMITATIONS = [
     "本报告所有检验均为相关或组间差异分析，不构成因果推断。",
     "结论仅基于当前数据集，向其他人群或场景外推需谨慎。",
     "缺失值处理：相关与配对检验按有效配对剔除，组间与卡方检验按整行剔除。",
+    "研究问题由同一数据画像生成并逐个检验，全部结论均为探索性分析；结论表所附 Benjamini–Hochberg 校正后 p 值供多重比较参考。",
     "标注来源为 LLM 的解读文字由模型生成，仅供参考；全部统计数字由本地 scipy 真实计算。",
 ]
+
+
+def _bh_adjust(pvals: list[float]) -> list[float]:
+    """Benjamini–Hochberg 校正，返回与输入顺序一致的校正后 p。"""
+    n = len(pvals)
+    if n <= 1:
+        return list(pvals)
+    order = sorted(range(n), key=lambda i: pvals[i])
+    adjusted = [0.0] * n
+    running = 1.0
+    for rank in range(n, 0, -1):
+        idx = order[rank - 1]
+        running = min(running, pvals[idx] * n / rank)
+        adjusted[idx] = min(running, 1.0)
+    return adjusted
+
+
+def _adjusted_p_map(ok_records: list) -> dict[int, float]:
+    pairs = [
+        (
+            i,
+            r.result.p_value_raw if r.result.p_value_raw is not None else r.result.p_value,
+        )
+        for i, r in enumerate(ok_records)
+    ]
+    real = [p for _, p in pairs if p is not None]
+    adjusted = _bh_adjust(real)
+    mapping: dict[int, float] = {}
+    cursor = 0
+    for i, p in pairs:
+        if p is not None:
+            mapping[i] = adjusted[cursor]
+            cursor += 1
+    return mapping
+
+
+def _sparse_marker(res) -> str:
+    if res.extra.get("sparse_expected_rate", 0) > 0 and res.extra.get("test_used") != "fisher_exact":
+        return "（稀疏）"
+    return ""
 
 
 def _md(text: str) -> str:
@@ -200,11 +241,12 @@ def build_markdown(
     lines += ["", heading("结论与局限"), ""]
     ok_records = [r for r in records if r.result.status == "ok"]
     if ok_records:
+        adj_map = _adjusted_p_map(ok_records)
         lines += [
-            "| 实验 | 方法 | 统计量 | p 值 | 结论 |",
-            "|---|---|---|---|---|",
+            "| 实验 | 方法 | 统计量 | p 值 | BH 校正后 | 结论 |",
+            "|---|---|---|---|---|---|",
         ]
-        for rec in ok_records:
+        for idx, rec in enumerate(ok_records):
             res = rec.result
             stat_txt = (
                 f"{res.statistic_name} = {res.statistic:.3f}"
@@ -212,10 +254,13 @@ def build_markdown(
                 else "—"
             )
             p_txt = format_p(res.p_value) if res.p_value is not None else "—"
+            adj = adj_map.get(idx)
+            adj_txt = f"{adj:.4f}" if adj is not None else "—"
             decision = "拒绝 H0" if res.decision == "reject_h0" else "未能拒绝 H0"
+            decision += _sparse_marker(res)
             method_cn = METHOD_CN.get(rec.plan.method, rec.plan.method)
             lines.append(
-                f"| {_md(rec.plan.experiment_id)} | {method_cn} | {stat_txt} | {p_txt} | {decision} |"
+                f"| {_md(rec.plan.experiment_id)} | {method_cn} | {stat_txt} | {p_txt} | {adj_txt} | {decision} |"
             )
         lines.append("")
     lines += [f"- {item}" for item in LIMITATIONS]
@@ -392,10 +437,11 @@ def build_html(
     parts.append(heading("结论与局限"))
     ok_records = [r for r in records if r.result.status == "ok"]
     if ok_records:
+        adj_map = _adjusted_p_map(ok_records)
         parts.append(
-            "<table><tr><th>实验</th><th>方法</th><th>统计量</th><th>p 值</th><th>结论</th></tr>"
+            "<table><tr><th>实验</th><th>方法</th><th>统计量</th><th>p 值</th><th>BH 校正后</th><th>结论</th></tr>"
         )
-        for rec in ok_records:
+        for idx, rec in enumerate(ok_records):
             res = rec.result
             stat_txt = (
                 f"{_esc(res.statistic_name)} = {res.statistic:.3f}"
@@ -403,11 +449,14 @@ def build_html(
                 else "—"
             )
             p_txt = format_p(res.p_value) if res.p_value is not None else "—"
+            adj = adj_map.get(idx)
+            adj_txt = f"{adj:.4f}" if adj is not None else "—"
             decision = "拒绝 H0" if res.decision == "reject_h0" else "未能拒绝 H0"
+            decision += _sparse_marker(res)
             method_cn = METHOD_CN.get(rec.plan.method, rec.plan.method)
             parts.append(
                 f"<tr><td>{_esc(rec.plan.experiment_id)}</td><td>{_esc(method_cn)}</td>"
-                f"<td>{stat_txt}</td><td>{p_txt}</td><td>{decision}</td></tr>"
+                f"<td>{stat_txt}</td><td>{p_txt}</td><td>{adj_txt}</td><td>{_esc(decision)}</td></tr>"
             )
         parts.append("</table>")
     parts.append("<ul>" + "".join(f"<li>{_esc(item)}</li>" for item in LIMITATIONS) + "</ul>")

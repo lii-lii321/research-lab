@@ -122,6 +122,7 @@ class ExperimentResult(BaseModel):
     statistic: Optional[float] = None
     statistic_name: str = ""
     p_value: Optional[float] = None
+    p_value_raw: Optional[float] = None
     effect_size: Optional[float] = None
     effect_name: str = ""
     decision: Literal["reject_h0", "fail_to_reject_h0", "none"] = "none"
