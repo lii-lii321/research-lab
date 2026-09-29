@@ -1,0 +1,86 @@
+# AI Data Research Lab
+
+[![CI](https://github.com/lii-lii321/research-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/lii-lii321/research-lab/actions/workflows/ci.yml)
+
+面向数据科学工作流的智能实验平台：从一份 CSV 到一份可复现的研究报告。
+AI 只负责提出计划与解释结果 —— 所有数字来自真实执行的代码。
+
+## 当前阶段
+
+**Phase 1 MVP 完成（v0.2.0）：画像 → 研究问题 → 实验计划 → 真实执行 → 研究报告**
+
+*Week 1 — Dataset Profiler*（纯确定性分析，不依赖 LLM）
+
+- 表格文件读取：CSV（utf-8 / gbk 自动回退）与 Excel，≤50MB
+- 类型推断：数值 / 类别 / 布尔 / 时间 / 标识符 / 文本
+- 数据集总览：行列数、缺失、重复、内存、类型分布
+- 数值画像：五数概括、偏度峰度、IQR 离群值
+- 质量预警：高缺失、恒定列、类别不平衡、高相关字段对、明显偏斜、标识符提示
+- 目标变量候选建议
+
+*Week 2 — AI 研究问题 + 实验计划*
+
+- LLM 基于画像提出 3~5 个可检验的研究问题（RQ），附理由、涉及变量、建议方法
+- 每个问题生成结构化实验计划：假设 / 统计方法 / H0 / H1 / α
+- 统计方法白名单校验：LLM 给出白名单外的方法时按变量类型规则自动校正
+- 规则兜底：未配置 LLM 或 LLM 输出不可用时，按变量类型规则生成计划（source=rule，全程可溯源）
+
+*Week 3 — 受控执行器 + 统计检验*
+
+- 真实执行：实验计划用 scipy 真实运行——Pearson/Spearman 相关、独立/Welch/Mann-Whitney 组间比较、
+  ANOVA/Kruskal-Wallis 多组比较、配对 t 检验、卡方独立性检验、简单线性回归
+- 效应量：r²、Cohen's d / dz、η²、Cramér's V
+- 统计结论自动判定（拒绝/未能拒绝 H0），措辞严格区分"不显著"与"H0 成立"
+- LLM 结果解读：只允许基于执行产出的真实数字，禁止编造；失败或未配置时规则模板解读兜底
+- 数据防护：配对观测数、分组样本量、列联表维度等前置校验，数据不足返回结构化失败原因
+- 新增接口：`POST /api/execute-experiment`
+- Streamlit 第四步：一键执行 → 统计量/p 值/效应量/有效样本指标卡 + 散点/箱线/柱状可视化 + 结果 JSON 下载
+
+*Week 4 — 可视化打磨 + 研究报告导出*
+
+- 数值字段相关矩阵热力图（画像页）
+- 实验历史管理：同一数据集下多次执行自动汇总，换数据或重新生成问题时自动失效
+- 一键生成研究报告（Markdown + HTML 双格式）：数据画像、质量提示、研究问题、
+  每个实验的假设/方法/真实结果/解读、结论与局限、完整实验汇总表
+- 报告内置复现说明与解读来源标注（LLM / 规则模板），HTML 对动态内容做转义
+- 新增接口：`POST /api/report`
+- 图表逻辑抽离 `utils/charts.py`（matplotlib Agg，微软雅黑，白底藏青）
+
+已交付接口：`POST /api/profile`、`POST /api/research-questions`、`POST /api/experiment-plan`、`POST /api/execute-experiment`、`POST /api/report`
+
+## LLM 配置（可选）
+
+```bash
+copy .env.example .env    # 填入 AI_API_KEY，其余保持默认即可
+```
+
+未配置时研究问题生成不可用，实验计划自动走规则模式。
+
+## 快速开始
+
+```bash
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+.venv\Scripts\python scripts\generate_sample.py        # 生成示例数据
+.venv\Scripts\python -m streamlit run app.py           # 界面 http://localhost:8501
+.venv\Scripts\python -m uvicorn main:app --port 8000   # API 文档 http://localhost:8000/docs
+.venv\Scripts\python -m pytest                         # 测试
+```
+
+## 目录
+
+```
+main.py / app.py          FastAPI 与 Streamlit 入口
+routers/                  API 路由（profile / research）
+models/                   Pydantic 模型
+services/                 核心逻辑（profiler / llm / research_questions / planner / executor / report）
+utils/                    文件读取、图表、JSON 提取、示例数据
+scripts/                  示例数据生成与冒烟脚本
+tests/                    pytest 测试
+PROJECT_BRIEF.md          立项书与三阶段路线
+```
+
+## 路线
+
+Phase 1 统计分析流水线 → Phase 2 ML 基线 + 实验追踪 → Phase 3 Research Agent + Paper RAG
