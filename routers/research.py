@@ -17,7 +17,7 @@ from models.schemas import (
 from services.executor import run_experiment
 from services.llm import LLMClient, LLMError, get_llm_client
 from services.planner import generate_experiment_plan
-from services.research_questions import generate_research_questions
+from services.research_questions import generate_research_questions_auto
 from services.report import build_report
 from utils.uploads import load_dataset
 
@@ -29,18 +29,8 @@ async def research_questions(
     file: UploadFile,
     client: Annotated[Optional[LLMClient], Depends(get_llm_client)],
 ) -> list[ResearchQuestion]:
-    if client is None:
-        raise HTTPException(
-            status_code=503,
-            detail="LLM 未配置：复制 .env.example 为 .env 并填写 AI_API_KEY 后重启",
-        )
     df, report = await load_dataset(file)
-    try:
-        return generate_research_questions(df, report, client)
-    except LLMError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=502, detail=f"LLM 输出无法解析：{exc}") from exc
+    return generate_research_questions_auto(df, report, client)
 
 
 @router.post("/experiment-plan", response_model=ExperimentPlan)

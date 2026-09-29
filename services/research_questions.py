@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from models.schemas import ProfileReport, ResearchQuestion
-from services.llm import LLMClient
+from services.llm import LLMClient, LLMError
 from utils.textjson import extract_json_array
 
 SYSTEM = (
@@ -80,3 +80,85 @@ def generate_research_questions(
     if not valid:
         raise ValueError("LLM 提出的问题均不含有效变量")
     return valid
+
+
+def generate_research_questions_rule(
+    df: pd.DataFrame, report: ProfileReport, max_questions: int = 4
+) -> list[ResearchQuestion]:
+    """确定性规则提出研究问题：目标候选 × 变量类型 → 可检验的 RQ。"""
+    cols = {c.name: c for c in report.columns}
+    candidates = [t.column for t in report.target_candidates]
+    target = candidates[0] if candidates else next(
+        (c.name for c in report.columns if c.type == "numeric"), None
+    )
+    questions: list[ResearchQuestion] = []
+
+    def add(question: str, rationale: str, variables: list[str], method: str) -> None:
+        if len(questions) >= max_questions:
+            return
+        questions.append(
+            ResearchQuestion(
+                id=f"RQ{len(questions) + 1}",
+                question=question,
+                rationale=rationale,
+                variables=variables,
+                suggested_method=method,
+                source="rule",
+            )
+        )
+
+    if target is not None and target in cols:
+        numerics = [
+            c for c in report.columns
+            if c.type == "numeric" and c.name != target and c.missing_rate <= 0.3
+        ][:2]
+        for c in numerics:
+            add(
+                f"{c.name} 与 {target} 是否存在显著相关关系？",
+                "数值目标配数值特征，可用相关分析直接检验",
+                [c.name, target],
+                "相关分析",
+            )
+        categorical = [
+            c for c in report.columns
+            if c.type in ("categorical", "boolean")
+            and c.name != target and 2 <= c.n_unique <= 5
+        ]
+        if cols[target].type in ("categorical", "boolean"):
+            for c in categorical[:2]:
+                add(
+                    f"{c.name} 与 {target} 之间是否存在关联？",
+                    "两个类别变量，可用卡方独立性检验",
+                    [c.name, target],
+                    "关联分析",
+                )
+        else:
+            for c in categorical[:2]:
+                add(
+                    f"不同 {c.name} 分组之间的 {target} 是否存在显著差异？",
+                    f"{c.name} 有 {c.n_unique} 个取值，可做组间比较",
+                    [c.name, target],
+                    "组间比较",
+                )
+    if not questions:
+        numerics = [c.name for c in report.columns if c.type == "numeric"][:2]
+        if len(numerics) == 2:
+            add(
+                f"{numerics[0]} 与 {numerics[1]} 是否存在显著相关关系？",
+                "未识别到目标变量，退而检验前两个数值列的相关性",
+                numerics,
+                "相关分析",
+            )
+    return questions
+
+
+def generate_research_questions_auto(
+    df: pd.DataFrame, report: ProfileReport, client: LLMClient | None
+) -> list[ResearchQuestion]:
+    """LLM 可用则用 LLM，失败或未配置时回退规则模式（source 标注来源）。"""
+    if client is not None:
+        try:
+            return generate_research_questions(df, report, client)
+        except (LLMError, ValueError):
+            pass
+    return generate_research_questions_rule(df, report)

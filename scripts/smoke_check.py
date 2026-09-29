@@ -108,6 +108,15 @@ def main() -> None:
             listed = _json.loads(resp.read().decode("utf-8"))
         assert any(e["uid"] == ml["tracked_uid"] for e in listed), listed
         results.append(f"api experiments listed={len(listed)}")
+        agent = post_csv(
+            "/api/agent/run",
+            {"task_description": "研究影响学生成绩的因素", "max_questions": "2", "dataset_name": "student_performance.csv"},
+        )
+        assert agent["status"] == "ok", agent.get("steps")
+        results.append(
+            f"api agent steps={len(agent['steps'])} questions={len(agent['questions'])} "
+            f"records={len(agent['records'])} report_md={len(agent['report_markdown'])}"
+        )
     finally:
         uvicorn_proc.terminate()
 

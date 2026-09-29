@@ -33,3 +33,21 @@ def test_app_ml_experiment_flow():
     assert result.status == "ok"
     assert result.task == "regression"
     assert result.tracked_uid
+
+
+def test_app_agent_flow(tmp_path, monkeypatch):
+    from services.tracking import TrackingStore
+
+    monkeypatch.setenv("RESEARCH_LAB_DB", str(tmp_path / "app_agent.db"))
+    at = make_app()
+    at.run()
+    assert not at.exception
+    at.text_input(key="agent_task").set_value("研究影响学生成绩的因素")
+    at.slider(key="agent_max").set_value(2)
+    at.button(key="agent_run").click()
+    at.run()
+    assert not at.exception
+    result = at.session_state["agent_result"]
+    assert result.status == "ok"
+    assert result.questions
+    assert "AI 数据科学研究报告" in result.report_markdown

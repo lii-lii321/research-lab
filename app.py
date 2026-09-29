@@ -9,13 +9,14 @@ import pandas as pd
 import streamlit as st
 
 from models.schemas import ExperimentPlan, ExperimentRecord, MLExperimentResult, ProfileReport, TYPE_CN
+from services.agent import run_research_agent
 from services.executor import run_experiment
 from services.llm import LLMError, get_llm_client
 from services.ml_lab import run_ml_experiment
 from services.planner import generate_experiment_plan
 from services.profiler import profile_dataset
 from services.report import build_report
-from services.research_questions import generate_research_questions
+from services.research_questions import generate_research_questions_auto
 from services.tracking import TrackingStore
 from utils.charts import correlation_heatmap, result_figure
 from utils.io import read_tabular
@@ -155,16 +156,13 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
 
     st.divider()
     client = get_llm_client()
-    st.subheader("第二步 · AI 研究问题")
+    st.subheader("第二步 · 研究问题")
     if client is None:
-        st.warning(
-            "未配置 LLM：复制 `.env.example` 为 `.env` 并填写 `AI_API_KEY` 后重启。"
-            "研究问题生成需要 LLM；实验计划的规则模式不受影响。"
-        )
-    if st.button("生成研究问题", type="primary", disabled=client is None):
+        st.caption("未配置 LLM：当前使用规则模式提出问题（可复制 `.env.example` 为 `.env` 填入 key 启用 LLM）。")
+    if st.button("生成研究问题", type="primary"):
         with st.spinner("正在基于数据画像提出研究问题…"):
             try:
-                st.session_state["rqs"] = generate_research_questions(df, report, client)
+                st.session_state["rqs"] = generate_research_questions_auto(df, report, client)
                 for key in ("plan", "result", "history", "report"):
                     st.session_state.pop(key, None)
             except (LLMError, ValueError) as exc:
@@ -175,7 +173,8 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
         labels = [f"{q.id} · {q.question}" for q in rqs]
         choice = st.radio("选择研究问题", labels, label_visibility="collapsed")
         rq = rqs[labels.index(choice)]
-        st.caption(f"{rq.rationale}　｜　变量：{'、'.join(rq.variables)}　｜　建议：{rq.suggested_method}")
+        source_cn = "LLM 提出" if rq.source == "llm" else "规则生成"
+        st.caption(f"{rq.rationale}　｜　变量：{'、'.join(rq.variables)}　｜　建议：{rq.suggested_method}　｜　{source_cn}")
 
         st.divider()
         st.subheader("第三步 · 实验计划")
@@ -267,7 +266,11 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
         with st.spinner("正在汇总生成研究报告…"):
             questions = st.session_state.get("rqs") or []
             markdown, html_doc = build_report(
-                report, st.session_state.get("dataset_name", "dataset"), questions, history
+                report,
+                st.session_state.get("dataset_name", "dataset"),
+                questions,
+                history,
+                st.session_state.get("ml_result"),
             )
             st.session_state["report"] = {
                 "md": markdown,
@@ -364,11 +367,12 @@ def render_tracking() -> None:
     st.subheader("实验追踪")
     st.caption(
         "ML 实验自动入库（SQLite：`data/tracking/experiments.db`）——记录数据指纹、特征集、"
-        "模型、超参、指标与时间戳，可跨数据集对比。"
+        "模型、超参、指标与时间戳。点击行查看详情；同指纹实验可看指标趋势。"
     )
-    rows = TrackingStore().list_experiments(30)
+    store = TrackingStore()
+    rows = store.list_experiments(50)
     if not rows:
-        st.info("暂无实验记录——到「ML 实验室」运行一次实验即可入库。")
+        st.info("暂无实验记录——到「ML 实验室」或「自动研究」运行一次实验即可入库。")
         return
     table = pd.DataFrame([t.model_dump() for t in rows]).rename(
         columns={
@@ -384,7 +388,92 @@ def render_tracking() -> None:
             "best_metric_value": "最佳值",
         }
     )
-    st.dataframe(table, use_container_width=True, hide_index=True)
+    selection = st.dataframe(
+        table,
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="track_table",
+    )
+    selected = selection.selection.rows if hasattr(selection, "selection") else []
+    if selected:
+        row = rows[selected[0]]
+        detail = store.get_experiment(row.uid)
+        if detail:
+            with st.expander(f"实验详情 {row.uid}", expanded=True):
+                st.json(detail)
+        same = [
+            t for t in store.list_experiments(100)
+            if t.dataset_name == row.dataset_name and t.task == row.task and t.best_metric_value is not None
+        ]
+        if len(same) >= 2:
+            same.sort(key=lambda t: t.created_at)
+            trend = pd.DataFrame(
+                {
+                    "最佳值": [t.best_metric_value for t in same],
+                },
+                index=[t.created_at for t in same],
+            )
+            st.subheader("同数据集同任务 · 最佳指标趋势")
+            st.line_chart(trend)
+
+
+def render_agent(df: pd.DataFrame, report: ProfileReport) -> None:
+    st.subheader("自动研究 Agent")
+    st.caption(
+        "一句话任务 → 数据画像 → 研究问题 → 统计实验 → ML 基线 → 研究报告，"
+        "全自动串联；未配置 LLM 时以规则模式运行（每个环节的来源都会标注）。"
+    )
+    task = st.text_input("研究任务描述", value="研究影响学生成绩的关键因素", key="agent_task")
+    max_q = st.slider("最多研究问题数", 1, 5, 3, key="agent_max")
+    client = get_llm_client()
+    if st.button("启动自动研究", type="primary", key="agent_run"):
+        with st.spinner("Agent 运行中：画像 → 研究问题 → 统计实验 → ML 基线 → 报告…"):
+            st.session_state["agent_result"] = run_research_agent(
+                df,
+                report,
+                task_description=task,
+                max_questions=max_q,
+                client=client,
+                store=TrackingStore(),
+                dataset_name=st.session_state.get("dataset_name", "dataset"),
+            )
+    result = st.session_state.get("agent_result")
+    if result is None:
+        return
+    if result.status != "ok":
+        st.error(f"自动研究未完成：{result.reason}")
+    else:
+        ml_desc = "—"
+        if result.ml_result and result.ml_result.status == "ok":
+            ml_desc = f"{result.ml_result.best_model}（{result.ml_result.best_metric_name} = {result.ml_result.best_metric_value}）"
+        st.success(
+            f"完成：{len(result.questions)} 个研究问题 · {len(result.records)} 个统计实验 · "
+            f"ML 最佳 {ml_desc} · 总耗时 {result.runtime_seconds} 秒"
+        )
+        st.subheader("执行时间线")
+        icon = {"ok": "✅", "failed": "⚠️"}
+        for s in result.steps:
+            st.markdown(f"- {icon[s.status]} **{s.name}**（{s.seconds}s）— {s.detail}")
+    if result.report_markdown:
+        dl_md, dl_html = st.columns(2)
+        dl_md.download_button(
+            "下载报告（.md）",
+            data=result.report_markdown,
+            file_name=f"{result.filename_base}_agent_report.md",
+            mime="text/markdown",
+            key="agent_dl_md",
+        )
+        dl_html.download_button(
+            "下载报告（.html）",
+            data=result.report_html,
+            file_name=f"{result.filename_base}_agent_report.html",
+            mime="text/html",
+            key="agent_dl_html",
+        )
+        with st.expander("报告预览（Markdown）", expanded=False):
+            st.markdown(result.report_markdown)
 
 
 def main() -> None:
@@ -410,13 +499,17 @@ def main() -> None:
         for key in ("rqs", "plan", "result", "history", "report", "ml_result"):
             st.session_state.pop(key, None)
 
-    tab_flow, tab_ml, tab_track = st.tabs(["① 分析流程", "② ML 实验室", "③ 实验追踪"])
+    tab_flow, tab_ml, tab_track, tab_agent = st.tabs(
+        ["① 分析流程", "② ML 实验室", "③ 实验追踪", "④ 自动研究"]
+    )
     with tab_flow:
         render_flow(df, report)
     with tab_ml:
         render_ml_lab(df, report)
     with tab_track:
         render_tracking()
+    with tab_agent:
+        render_agent(df, report)
 
 
 if __name__ == "__main__":

@@ -5,15 +5,12 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
 from models.schemas import MLExperimentResult, TrackedExperiment
+from routers.deps import get_tracking_store
 from services.ml_lab import TASKS, run_ml_experiment
 from services.tracking import TrackingStore
 from utils.uploads import load_dataset
 
 router = APIRouter(prefix="/api", tags=["ml"])
-
-
-def get_tracking_store() -> TrackingStore:
-    return TrackingStore()
 
 
 @router.post("/ml-experiment", response_model=MLExperimentResult)
@@ -40,3 +37,14 @@ def experiments(
     store: Annotated[Optional[TrackingStore], Depends(get_tracking_store)] = None,
 ) -> list[TrackedExperiment]:
     return (store or TrackingStore()).list_experiments(limit=min(max(limit, 1), 100))
+
+
+@router.get("/experiments/{uid}")
+def experiment_detail(
+    uid: str,
+    store: Annotated[Optional[TrackingStore], Depends(get_tracking_store)] = None,
+) -> dict:
+    detail = (store or TrackingStore()).get_experiment(uid)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"实验 {uid} 不存在")
+    return detail

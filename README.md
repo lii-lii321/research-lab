@@ -7,9 +7,10 @@ AI 只负责提出计划与解释结果 —— 所有数字来自真实执行的
 
 ## 当前阶段
 
-**Phase 2 进行中（v0.3.0）：ML 实验室 + Experiment Tracking**
+**v0.4.0：Research Agent 上线 —— 一句话任务自动产出研究报告**
 
 *Phase 1 MVP（v0.2.0）：画像 → 研究问题 → 实验计划 → 真实执行 → 研究报告*
+*Phase 2 核心（v0.3.0）：ML 实验室 + Experiment Tracking*
 
 *Week 1 — Dataset Profiler*（纯确定性分析，不依赖 LLM）
 
@@ -61,7 +62,21 @@ AI 只负责提出计划与解释结果 —— 所有数字来自真实执行的
 - Streamlit 改为三标签页：① 分析流程 ② ML 实验室 ③ 实验追踪
 - 新增接口：`POST /api/ml-experiment`、`GET /api/experiments`
 
-全部接口：`POST /api/profile`、`POST /api/research-questions`、`POST /api/experiment-plan`、`POST /api/execute-experiment`、`POST /api/report`、`POST /api/ml-experiment`、`GET /api/experiments`
+全部接口：`POST /api/profile`、`POST /api/research-questions`、`POST /api/experiment-plan`、`POST /api/execute-experiment`、`POST /api/report`、`POST /api/ml-experiment`、`GET /api/experiments`、`GET /api/experiments/{uid}`、`POST /api/agent/run`
+
+*v0.4.0 — Research Agent*
+
+- 一句话研究任务自动串联：数据画像 → 研究问题 → 统计实验（计划+真实执行）→ ML 基线 → 研究报告，每步带耗时与来源的执行时间线
+- 规则化研究问题：未配置 LLM 时按"目标候选 × 变量类型"确定性提出 RQ——**零 Key 可跑通全链路**，所有环节标注 llm / rule 来源
+- 报告新增 ML 基线章节（模型对比表 / 最佳模型 / 排除特征），章节号动态编排
+- 实验追踪深化：实验详情接口与界面、同数据集同任务的最佳指标趋势图
+- Docker 部署（api + ui 双服务，追踪库落卷持久化）
+
+## Docker 部署
+
+```bash
+docker compose up --build   # API http://localhost:8000/docs · UI http://localhost:8501
+```
 
 ## LLM 配置（可选）
 

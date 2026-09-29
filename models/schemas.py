@@ -86,6 +86,7 @@ class ResearchQuestion(BaseModel):
     rationale: str = ""
     variables: list[str] = Field(default_factory=list)
     suggested_method: str = ""
+    source: Literal["llm", "rule"] = "llm"
 
 
 class ExperimentPlan(BaseModel):
@@ -186,6 +187,27 @@ class TrackedExperiment(BaseModel):
     best_model: Optional[str] = None
     best_metric_name: Optional[str] = None
     best_metric_value: Optional[float] = None
+
+
+class AgentStep(BaseModel):
+    name: str
+    status: Literal["ok", "failed"]
+    detail: str = ""
+    seconds: float = 0.0
+
+
+class AgentRunResult(BaseModel):
+    status: Literal["ok", "failed"]
+    reason: str = ""
+    task_description: str = ""
+    steps: list[AgentStep] = Field(default_factory=list)
+    questions: list[ResearchQuestion] = Field(default_factory=list)
+    records: list[ExperimentRecord] = Field(default_factory=list)
+    ml_result: Optional[MLExperimentResult] = None
+    report_markdown: str = ""
+    report_html: str = ""
+    filename_base: str = "report"
+    runtime_seconds: float = 0.0
 
 
 TYPE_CN = {

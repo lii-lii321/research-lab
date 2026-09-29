@@ -7,15 +7,20 @@ from datetime import datetime
 
 from models.schemas import (
     ExperimentRecord,
+    MLExperimentResult,
     ProfileReport,
     ResearchQuestion,
     TYPE_CN,
 )
 from services.executor import METHOD_CN, format_p
 
-GENERATOR = "AI Data Research Lab v0.2.0"
+GENERATOR = "AI Data Research Lab v0.4.0"
 
 LEVEL_ICON = {"critical": "🔴", "warning": "🟡", "info": "🔵"}
+
+CN_NUM = ("一", "二", "三", "四", "五", "六", "七")
+
+TASK_CN = {"regression": "回归", "classification": "分类", "clustering": "聚类"}
 
 LIMITATIONS = [
     "本报告所有检验均为相关或组间差异分析，不构成因果推断。",
@@ -75,7 +80,14 @@ def build_markdown(
     questions: list[ResearchQuestion],
     records: list[ExperimentRecord],
     generated: str,
+    ml_result: MLExperimentResult | None = None,
 ) -> str:
+    section = {"n": 0}
+
+    def heading(title: str) -> str:
+        section["n"] += 1
+        return f"## {CN_NUM[section['n'] - 1]}、{title}"
+
     d = profile.dataset
     lines = [
         f"# AI 数据科学研究报告",
@@ -85,7 +97,7 @@ def build_markdown(
         f"- 复现说明：全部统计量由 scipy 在本地对上传数据真实计算；"
         f"LLM 仅参与研究问题提出与结果解读，且均已在正文标注来源。",
         "",
-        "## 一、数据画像",
+        heading("数据画像"),
         "",
         f"- 规模：{d.n_rows:,} 行 × {d.n_cols} 列",
         f"- 缺失：{d.missing_cells:,} 个单元格（{d.missing_rate:.1%}）",
@@ -120,7 +132,7 @@ def build_markdown(
             f"- {p.column_a} × {p.column_b}：r = {p.coefficient:.2f}"
             for p in profile.correlations
         ]
-    lines += ["", "## 二、研究问题", ""]
+    lines += ["", heading("研究问题"), ""]
     if questions:
         for q in questions:
             lines.append(
@@ -131,14 +143,45 @@ def build_markdown(
                 lines.append(f"  - 理由：{_md(q.rationale)}")
     else:
         lines.append("-（本次会话未生成研究问题）")
-    lines += ["", "## 三、实验与结果", ""]
+    lines += ["", heading("实验与结果"), ""]
     if records:
         for rec in records:
             lines += _experiment_lines_md(rec)
             lines.append("")
     else:
         lines.append("-（本次会话未执行实验）")
-    lines += ["", "## 四、结论与局限", ""]
+    if ml_result is not None:
+        lines += ["", heading("ML 基线实验"), ""]
+        if ml_result.status != "ok":
+            lines.append(f"- ML 基线未完成：{_md(ml_result.reason)}")
+        else:
+            target_desc = ml_result.target or "（无目标 · 聚类）"
+            fingerprint = ml_result.dataset_fingerprint[:8]
+            lines.append(
+                f"- 任务：{_md(TASK_CN.get(ml_result.task, ml_result.task))}"
+                f"（目标：{_md(target_desc)}；数据指纹 {fingerprint}）"
+            )
+            lines.append(
+                f"- 最佳模型：**{ml_result.best_model}**"
+                f"（{ml_result.best_metric_name} = {ml_result.best_metric_value}）"
+            )
+            lines += [
+                "| 模型 | 超参 | 指标 | 耗时(秒) |",
+                "|---|---|---|---|",
+            ]
+            for m in ml_result.models:
+                params = "、".join(f"{k}={v}" for k, v in m.params.items()) or "—"
+                metrics = "，".join(f"{k}={v}" for k, v in m.metrics.items())
+                lines.append(
+                    f"| {m.model} | {_md(params)} | {_md(metrics)} | {m.train_seconds:.2f} |"
+                )
+            if ml_result.task == "clustering" and ml_result.cluster_sizes:
+                sizes = "、".join(f"{k}：{v}" for k, v in ml_result.cluster_sizes.items())
+                lines.append(f"- 簇规模：{_md(sizes)}")
+            if ml_result.excluded:
+                excluded_desc = "；".join(f"{e.column}（{e.reason}）" for e in ml_result.excluded)
+                lines.append(f"- 已排除特征：{_md(excluded_desc)}")
+    lines += ["", heading("结论与局限"), ""]
     ok_records = [r for r in records if r.result.status == "ok"]
     if ok_records:
         lines += [
@@ -174,7 +217,14 @@ def build_html(
     questions: list[ResearchQuestion],
     records: list[ExperimentRecord],
     generated: str,
+    ml_result: MLExperimentResult | None = None,
 ) -> str:
+    section = {"n": 0}
+
+    def heading(title: str) -> str:
+        section["n"] += 1
+        return f"<h2>{CN_NUM[section['n'] - 1]}、{_esc(title)}</h2>"
+
     d = profile.dataset
     parts: list[str] = []
     parts.append(
@@ -196,7 +246,7 @@ def build_html(
         f"<p class=\"meta\">数据集：{_esc(dataset_name)} ｜ 生成时间：{_esc(generated)}<br>"
         f"复现说明：全部统计量由 scipy 在本地对上传数据真实计算；LLM 仅参与研究问题提出与结果解读，均已在正文标注来源。</p>"
     )
-    parts.append("<h2>一、数据画像</h2><ul>")
+    parts.append(heading("数据画像") + "<ul>")
     parts.append(
         f"<li>规模：{d.n_rows:,} 行 × {d.n_cols} 列；缺失 {d.missing_cells:,} 单元格"
         f"（{d.missing_rate:.1%}）；重复行 {d.duplicate_rows:,}；内存 {d.memory_mb:.2f} MB</li>"
@@ -234,7 +284,7 @@ def build_html(
             for p in profile.correlations
         ]
         parts.append("</ul>")
-    parts.append("<h2>二、研究问题</h2><ul>")
+    parts.append(heading("研究问题") + "<ul>")
     if questions:
         for q in questions:
             rationale = f"<br><span class=\"meta\">理由：{_esc(q.rationale)}</span>" if q.rationale else ""
@@ -244,7 +294,7 @@ def build_html(
             )
     else:
         parts.append("<li>（本次会话未生成研究问题）</li>")
-    parts.append("</ul><h2>三、实验与结果</h2>")
+    parts.append("</ul>" + heading("实验与结果"))
     if records:
         for rec in records:
             plan, res = rec.plan, rec.result
@@ -279,7 +329,37 @@ def build_html(
             )
     else:
         parts.append("<ul><li>（本次会话未执行实验）</li></ul>")
-    parts.append("<h2>四、结论与局限</h2>")
+    if ml_result is not None:
+        parts.append(heading("ML 基线实验"))
+        if ml_result.status != "ok":
+            parts.append(f"<ul><li>ML 基线未完成：{_esc(ml_result.reason)}</li></ul>")
+        else:
+            target_desc = ml_result.target or "（无目标 · 聚类）"
+            fingerprint = ml_result.dataset_fingerprint[:8]
+            parts.append(
+                f"<ul><li>任务：{_esc(TASK_CN.get(ml_result.task, ml_result.task))}"
+                f"（目标：{_esc(target_desc)}；数据指纹 {fingerprint}）</li>"
+                f"<li>最佳模型：<b>{_esc(ml_result.best_model)}</b>"
+                f"（{_esc(ml_result.best_metric_name)} = {ml_result.best_metric_value}）</li></ul>"
+            )
+            parts.append(
+                "<table><tr><th>模型</th><th>超参</th><th>指标</th><th>耗时(秒)</th></tr>"
+            )
+            for m in ml_result.models:
+                params = "、".join(f"{k}={v}" for k, v in m.params.items()) or "—"
+                metrics = "，".join(f"{k}={v}" for k, v in m.metrics.items())
+                parts.append(
+                    f"<tr><td>{_esc(m.model)}</td><td>{_esc(params)}</td>"
+                    f"<td>{_esc(metrics)}</td><td>{m.train_seconds:.2f}</td></tr>"
+                )
+            parts.append("</table>")
+            if ml_result.task == "clustering" and ml_result.cluster_sizes:
+                sizes = "、".join(f"{k}：{v}" for k, v in ml_result.cluster_sizes.items())
+                parts.append(f"<p class=\"meta\">簇规模：{_esc(sizes)}</p>")
+            if ml_result.excluded:
+                excluded_desc = "；".join(f"{e.column}（{e.reason}）" for e in ml_result.excluded)
+                parts.append(f"<p class=\"meta\">已排除特征：{_esc(excluded_desc)}</p>")
+    parts.append(heading("结论与局限"))
     ok_records = [r for r in records if r.result.status == "ok"]
     if ok_records:
         parts.append(
@@ -310,9 +390,10 @@ def build_report(
     dataset_name: str,
     questions: list[ResearchQuestion],
     records: list[ExperimentRecord],
+    ml_result: MLExperimentResult | None = None,
 ) -> tuple[str, str]:
     generated = datetime.now().strftime("%Y-%m-%d %H:%M")
     return (
-        build_markdown(profile, dataset_name, questions, records, generated),
-        build_html(profile, dataset_name, questions, records, generated),
+        build_markdown(profile, dataset_name, questions, records, generated, ml_result),
+        build_html(profile, dataset_name, questions, records, generated, ml_result),
     )

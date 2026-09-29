@@ -73,10 +73,14 @@ def test_profile_rejects_empty():
     assert resp.status_code == 400
 
 
-def test_research_questions_requires_llm(override_llm):
+def test_research_questions_rule_mode_without_llm(override_llm):
     override_llm(None)
     resp = client.post("/api/research-questions", files={"file": ("t.csv", CSV, "text/csv")})
-    assert resp.status_code == 503
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body
+    assert all(q["source"] == "rule" for q in body)
+    assert all(q["variables"] for q in body)
 
 
 def test_research_questions_with_fake_llm(override_llm):
@@ -86,6 +90,7 @@ def test_research_questions_with_fake_llm(override_llm):
     body = resp.json()
     assert body[0]["id"] == "RQ1"
     assert body[0]["variables"] == ["attendance_rate", "final_score"]
+    assert body[0]["source"] == "llm"
 
 
 def test_experiment_plan_rule_fallback_without_llm(override_llm):
@@ -268,3 +273,39 @@ def test_ml_experiment_bad_task(override_llm):
     )
     assert resp.status_code == 422
     assert "未知任务" in resp.json()["detail"]
+
+
+def test_agent_run_rule_mode(override_llm, tmp_path):
+    from routers.deps import get_tracking_store
+    from services.tracking import TrackingStore
+
+    override_llm(None)
+    app.dependency_overrides[get_tracking_store] = lambda: TrackingStore(tmp_path / "agent.db")
+    try:
+        rows = []
+        for i, x in enumerate([v / 10 for v in range(40)]):
+            rows.append(f"{x:.2f},{2 * x + 1:.2f},{'M' if i % 2 else 'F'}")
+        csv_data = ("hours,score,gender\n" + "\n".join(rows)).encode("utf-8")
+        resp = client.post(
+            "/api/agent/run",
+            files={"file": ("lin.csv", csv_data, "text/csv")},
+            data={"task_description": "研究影响成绩的因素", "max_questions": "2", "dataset_name": "lin.csv"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert [s["name"] for s in body["steps"]] == [
+            "数据画像", "研究问题", "统计实验", "ML 基线", "研究报告",
+        ]
+        assert body["questions"] and all(q["source"] == "rule" for q in body["questions"])
+        assert "ML 基线实验" in body["report_markdown"]
+        listed = client.get("/api/experiments")
+        assert any(e["uid"] == body["ml_result"]["tracked_uid"] for e in listed.json())
+        uid = body["ml_result"]["tracked_uid"]
+        detail = client.get(f"/api/experiments/{uid}")
+        assert detail.status_code == 200
+        assert detail.json()["dataset_name"] == "lin.csv"
+        missing = client.get("/api/experiments/nonexistent")
+        assert missing.status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_tracking_store, None)
