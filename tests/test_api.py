@@ -284,7 +284,8 @@ def test_agent_run_rule_mode(override_llm, tmp_path):
     try:
         rows = []
         for i, x in enumerate([v / 10 for v in range(40)]):
-            rows.append(f"{x:.2f},{2 * x + 1:.2f},{'M' if i % 2 else 'F'}")
+            noise = ((i * 7) % 5 - 2) * 0.3  # 加噪，避免零噪声数据让所有模型并列
+            rows.append(f"{x:.2f},{2 * x + 1 + noise:.2f},{'M' if i % 2 else 'F'}")
         csv_data = ("hours,score,gender\n" + "\n".join(rows)).encode("utf-8")
         resp = client.post(
             "/api/agent/run",

@@ -16,33 +16,6 @@ from models.schemas import TrackedExperiment
 
 DEFAULT_DB = Path("data/tracking/experiments.db")
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS experiments (
-    uid TEXT PRIMARY KEY,
-    created_at TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    task TEXT NOT NULL,
-    target TEXT,
-    dataset_name TEXT NOT NULL,
-    dataset_fingerprint TEXT NOT NULL,
-    n_rows INTEGER NOT NULL,
-    n_cols INTEGER NOT NULL,
-    feature_set TEXT NOT NULL,
-    models_results TEXT NOT NULL,
-    best_model TEXT,
-    best_metric_name TEXT,
-    best_metric_value REAL,
-    notes TEXT,
-    runtime_seconds REAL
-)
-"""
-
-_LIST_SQL = (
-    "SELECT uid, created_at, kind, task, target, dataset_name, n_rows, "
-    "best_model, best_metric_name, best_metric_value "
-    "FROM experiments ORDER BY created_at DESC, uid DESC LIMIT ?"
-)
-
 
 def dataframe_fingerprint(df: pd.DataFrame) -> str:
     digest = hashlib.sha256()
@@ -60,8 +33,9 @@ class TrackingStore:
 
     def _connect(self) -> sqlite3.Connection:
         if self._conn is None:
-            self._conn = sqlite3.connect(self.path)
-            self._conn.execute(_SCHEMA)
+            # timeout 缓解多进程并发写同一文件的 database is locked
+            self._conn = sqlite3.connect(self.path, timeout=30.0)
+            self._conn.execute("CREATE TABLE IF NOT EXISTS experiments (uid TEXT PRIMARY KEY, created_at TEXT NOT NULL, kind TEXT NOT NULL, task TEXT NOT NULL, target TEXT, dataset_name TEXT NOT NULL, dataset_fingerprint TEXT NOT NULL, n_rows INTEGER NOT NULL, n_cols INTEGER NOT NULL, feature_set TEXT NOT NULL, models_results TEXT NOT NULL, best_model TEXT, best_metric_name TEXT, best_metric_value REAL, notes TEXT, runtime_seconds REAL)")
             self._conn.commit()
         return self._conn
 
@@ -83,32 +57,12 @@ class TrackingStore:
     ) -> str:
         uid = uuid.uuid4().hex[:12]
         conn = self._connect()
-        conn.execute(
-            "INSERT INTO experiments VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                uid,
-                datetime.now().isoformat(timespec="seconds"),
-                kind,
-                task,
-                target,
-                dataset_name,
-                dataframe_fingerprint(df),
-                int(df.shape[0]),
-                int(df.shape[1]),
-                json.dumps(feature_set, ensure_ascii=False),
-                json.dumps(models_results, ensure_ascii=False),
-                best_model,
-                best_metric_name,
-                best_metric_value,
-                notes,
-                runtime_seconds,
-            ),
-        )
+        conn.execute("INSERT INTO experiments VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (uid, datetime.now().isoformat(timespec="seconds"), kind, task, target, dataset_name, dataframe_fingerprint(df), int(df.shape[0]), int(df.shape[1]), json.dumps(feature_set, ensure_ascii=False), json.dumps(models_results, ensure_ascii=False), best_model, best_metric_name, best_metric_value, notes, runtime_seconds))
         conn.commit()
         return uid
 
     def list_experiments(self, limit: int = 20) -> list[TrackedExperiment]:
-        rows = self._connect().execute(_LIST_SQL, (int(limit),)).fetchall()
+        rows = self._connect().execute("SELECT uid, created_at, kind, task, target, dataset_name, n_rows, best_model, best_metric_name, best_metric_value FROM experiments ORDER BY created_at DESC, uid DESC LIMIT ?", (int(limit),)).fetchall()
         return [
             TrackedExperiment(
                 uid=r[0], created_at=r[1], kind=r[2], task=r[3], target=r[4],
@@ -119,12 +73,7 @@ class TrackingStore:
         ]
 
     def get_experiment(self, uid: str) -> dict | None:
-        row = self._connect().execute(
-            "SELECT uid, created_at, kind, task, target, dataset_name, dataset_fingerprint, "
-            "n_rows, n_cols, feature_set, models_results, best_model, best_metric_name, "
-            "best_metric_value, notes, runtime_seconds FROM experiments WHERE uid = ?",
-            (uid,),
-        ).fetchone()
+        row = self._connect().execute("SELECT uid, created_at, kind, task, target, dataset_name, dataset_fingerprint, n_rows, n_cols, feature_set, models_results, best_model, best_metric_name, best_metric_value, notes, runtime_seconds FROM experiments WHERE uid = ?", (uid,)).fetchone()
         if row is None:
             return None
         return {

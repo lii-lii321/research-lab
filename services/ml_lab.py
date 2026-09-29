@@ -6,6 +6,7 @@ import time
 
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.cluster import KMeans
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
@@ -22,7 +23,7 @@ from sklearn.metrics import (
     roc_auc_score,
     silhouette_score,
 )
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 
@@ -206,6 +207,37 @@ def _supervised_metrics(
     return metrics
 
 
+def _fold_primary(task: str, y_true: pd.Series, pred: np.ndarray) -> float:
+    if task == "regression":
+        return float(r2_score(y_true, pred))
+    return float(f1_score(y_true, pred, average="macro", zero_division=0))
+
+
+def _cv_scores(
+    task: str,
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    numeric: list[str],
+    categorical: list[str],
+    estimator,
+    k: int,
+) -> tuple[str, list[float]]:
+    """分层 k 折（分类按 y 分层）交叉验证，返回主指标名与每折得分。"""
+    primary = "R2" if task == "regression" else "F1_macro"
+    if task == "classification":
+        splitter = StratifiedKFold(n_splits=k, shuffle=True, random_state=SEED)
+    else:
+        splitter = KFold(n_splits=k, shuffle=True, random_state=SEED)
+    base = Pipeline([("prep", _preprocessor(numeric, categorical)), ("model", estimator)])
+    scores: list[float] = []
+    for tr, va in splitter.split(X_train, y_train):
+        pipe = clone(base)
+        pipe.fit(X_train.iloc[tr], y_train.iloc[tr])
+        pred = pipe.predict(X_train.iloc[va])
+        scores.append(_fold_primary(task, y_train.iloc[va], pred))
+    return primary, scores
+
+
 def _run_supervised(df: pd.DataFrame, task: str, target: str, numeric: list[str], categorical: list[str]):
     feature_cols = numeric + categorical
     if target not in df.columns:
@@ -234,6 +266,10 @@ def _run_supervised(df: pd.DataFrame, task: str, target: str, numeric: list[str]
     X_train, X_test, y_train, y_test = train_test_split(
         X_df, y_model, test_size=TEST_SIZE, random_state=SEED, stratify=stratify_arg
     )
+    cv_k = 5 if len(X_train) >= 100 else 3
+    if task == "classification":
+        cv_k = min(cv_k, int(y_train.value_counts().min()))
+    use_cv = cv_k >= 2
     preprocessor = _preprocessor(numeric, categorical)
     results: list[MLModelResult] = []
     for name, estimator, params in (
@@ -245,11 +281,20 @@ def _run_supervised(df: pd.DataFrame, task: str, target: str, numeric: list[str]
         pred = pipe.predict(X_test)
         proba = pipe.predict_proba(X_test)[:, 1] if n_classes == 2 else None
         seconds = time.perf_counter() - started
+        metrics = _supervised_metrics(task, y_test, pred, proba, n_classes)
+        if use_cv:
+            primary, scores = _cv_scores(
+                task, X_train, y_train, numeric, categorical, estimator, cv_k
+            )
+            metrics[f"{primary}_CV"] = round(float(np.mean(scores)), 4)
+            metrics[f"{primary}_CVsd"] = (
+                round(float(np.std(scores, ddof=1)), 4) if len(scores) > 1 else 0.0
+            )
         results.append(
             MLModelResult(
                 model=name,
                 params=params,
-                metrics=_supervised_metrics(task, y_test, pred, proba, n_classes),
+                metrics=metrics,
                 train_seconds=round(seconds, 3),
             )
         )
@@ -324,7 +369,10 @@ def run_ml_experiment(
         k = None
         sizes = {}
         best_metric_name = "R2" if task == "regression" else "F1_macro"
-    best = max(models, key=lambda m: m.metrics.get(best_metric_name, float("-inf")))
+    # 单次 holdout 排名近乎抽签：有 CV 时按 CV 均值选最佳模型
+    cv_key = f"{best_metric_name}_CV"
+    key_metric = cv_key if any(cv_key in m.metrics for m in models) else best_metric_name
+    best = max(models, key=lambda m: m.metrics.get(key_metric, float("-inf")))
     result = MLExperimentResult(
         status="ok",
         task=task,

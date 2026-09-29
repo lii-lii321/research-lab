@@ -20,6 +20,8 @@ from services.llm import LLMClient, LLMError, get_llm_client
 from services.planner import generate_experiment_plan
 from services.research_questions import generate_research_questions_auto
 from services.report import build_report
+from routers.deps import get_tracking_store
+from services.tracking import TrackingStore
 from utils.uploads import load_dataset
 
 router = APIRouter(prefix="/api", tags=["research"])
@@ -28,10 +30,11 @@ router = APIRouter(prefix="/api", tags=["research"])
 @router.post("/research-questions", response_model=list[ResearchQuestion])
 async def research_questions(
     file: UploadFile,
-    client: Annotated[Optional[LLMClient], Depends(get_llm_client)],
+    task: str = Form(""),
+    client: Annotated[Optional[LLMClient], Depends(get_llm_client)] = None,
 ) -> list[ResearchQuestion]:
     df, report = await load_dataset(file)
-    return await run_in_threadpool(generate_research_questions_auto, df, report, client)
+    return await run_in_threadpool(generate_research_questions_auto, df, report, client, task)
 
 
 @router.post("/experiment-plan", response_model=ExperimentPlan)
@@ -64,6 +67,8 @@ async def execute_experiment(
     h0: str = Form(""),
     h1: str = Form(""),
     alpha: float = Form(0.05),
+    dataset_name: str = Form(""),
+    store: Annotated[Optional[TrackingStore], Depends(get_tracking_store)] = None,
     client: Annotated[Optional[LLMClient], Depends(get_llm_client)] = None,
 ) -> ExperimentResult:
     if not 0 < alpha < 0.5:
@@ -80,7 +85,14 @@ async def execute_experiment(
         variables=[v.strip() for v in variables.split(",") if v.strip()],
     )
     try:
-        return await run_in_threadpool(run_experiment, plan, df, client)
+        return await run_in_threadpool(
+            run_experiment,
+            plan,
+            df,
+            client,
+            store,
+            dataset_name.strip() or file.filename or "dataset",
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

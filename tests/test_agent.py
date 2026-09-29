@@ -60,11 +60,13 @@ def test_agent_full_pipeline_rule_mode(tmp_path, monkeypatch):
     assert result.references == FAKE_PAPERS
     assert "相关工作（文献引用）" in result.report_markdown
     assert FAKE_PAPERS[0].title in result.report_markdown
+    assert "附录：复现脚本" in result.report_markdown
+    assert "stats." in result.report_markdown
     assert result.filename_base == "students"
     assert result.report_html.startswith("<!DOCTYPE html>")
-    assert store.list_experiments()  # ML 实验已入库
-    tracked_uids = {r.uid for r in store.list_experiments()}
-    assert result.ml_result.tracked_uid in tracked_uids
+    kinds = {r.kind for r in store.list_experiments()}
+    assert kinds == {"stats", "ml"}  # 统计实验与 ML 基线都入库
+    assert result.ml_result.tracked_uid in {r.uid for r in store.list_experiments()}
 
 
 def test_agent_literature_disabled_skips_step(tmp_path):

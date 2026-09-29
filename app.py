@@ -16,6 +16,7 @@ from services.ml_lab import run_ml_experiment
 from services.planner import generate_experiment_plan
 from services.profiler import profile_dataset
 from services.report import build_report
+from services.repro import build_repro_script
 from services.research_questions import generate_research_questions_auto
 from services.tracking import TrackingStore
 from utils.charts import correlation_heatmap, result_figure
@@ -208,7 +209,13 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
             if st.button("执行统计检验", type="primary"):
                 with st.spinner("正在真实执行统计检验…"):
                     try:
-                        new_result = run_experiment(plan, df, client)
+                        new_result = run_experiment(
+                            plan,
+                            df,
+                            client,
+                            store=TrackingStore(),
+                            dataset_name=st.session_state.get("dataset_name", "dataset"),
+                        )
                         st.session_state["result"] = new_result
                         if new_result.status == "ok":
                             history = [
@@ -248,7 +255,14 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
                     st.markdown(f"**统计结论**：{badge}（α = {result.alpha}）")
                     st.info(result.interpretation)
                     render_result_chart(df, plan, result)
-                    st.download_button(
+                    repro_dl, result_dl = st.columns(2)
+                    repro_dl.download_button(
+                        "下载复现脚本（.py）",
+                        data=build_repro_script(plan),
+                        file_name=f"{plan.experiment_id}_repro.py",
+                        mime="text/x-python",
+                    )
+                    result_dl.download_button(
                         "下载实验结果（JSON）",
                         data=json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2),
                         file_name=f"{plan.experiment_id}-result.json",

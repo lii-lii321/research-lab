@@ -68,17 +68,20 @@ def run_research_agent(
 
     def do_questions() -> str:
         nonlocal questions
-        questions = generate_research_questions_auto(df, profile, client)[: max(1, max_questions)]
-        return f"提出 {len(questions)} 个研究问题（{'LLM' if client else '规则'}模式）"
+        questions = generate_research_questions_auto(
+            df, profile, client, task=task_description
+        )[: max(1, max_questions)]
+        mode = "LLM" if client else "规则"
+        return f"提出 {len(questions)} 个研究问题（{mode}模式{'，围绕任务关键词' if task_description else ''}）"
 
     def do_experiments() -> str:
         nonlocal records
         for q in questions:
             plan = generate_experiment_plan(q, profile, client)
-            result = run_experiment(plan, df, client)
+            result = run_experiment(plan, df, client, store=store, dataset_name=dataset_name)
             records.append(ExperimentRecord(plan=plan, result=result))
         done = sum(1 for r in records if r.result.status == "ok")
-        return f"执行 {len(records)} 个统计实验（{done} 个成功）"
+        return f"执行 {len(records)} 个统计实验（{done} 个成功，已入库追踪）"
 
     def do_ml() -> str:
         nonlocal ml_result

@@ -9,7 +9,10 @@ from models.schemas import ResearchQuestion
 from services.llm import LLMError
 from services.planner import generate_experiment_plan, suggest_method
 from services.profiler import profile_dataset
-from services.research_questions import generate_research_questions
+from services.research_questions import (
+    generate_research_questions,
+    generate_research_questions_rule,
+)
 
 
 class FakeLLM:
@@ -124,6 +127,36 @@ def test_plan_llm_bad_method_corrected_by_rule():
     assert "白名单" in plan.notes
 
 
+def test_plan_llm_type_mismatch_corrected():
+    """LLM 对两个数值变量给出 chi2：白名单内但类型组合不符 → 规则校正。"""
+    df = build_df()
+    report = profile_dataset(df)
+    rq = ResearchQuestion(id="RQ1", question="q", variables=["attendance_rate", "final_score"])
+    plan_json = json.dumps(
+        {"hypothesis": "h", "method": "chi2", "h0": "H0", "h1": "H1"}, ensure_ascii=False
+    )
+    plan = generate_experiment_plan(rq, report, FakeLLM(plan_json))
+    assert plan.source == "llm"
+    assert plan.method == "pearson"
+    assert "类型组合不符" in plan.notes
+
+
+def test_suggest_method_skew_aware():
+    rng = np.random.default_rng(5)
+    df = pd.DataFrame(
+        {
+            "x_skew": np.round(rng.lognormal(0.0, 1.0, 80), 2),
+            "score": np.round(rng.normal(60, 10, 80), 1),
+            "g": ["A"] * 40 + ["B"] * 40,
+        }
+    )
+    report = profile_dataset(df)
+    assert suggest_method(report, ["x_skew", "score"]) == "spearman"
+    assert suggest_method(report, ["g", "x_skew"]) == "mannwhitney"
+    normal_report = profile_dataset(build_df())
+    assert suggest_method(normal_report, ["attendance_rate", "final_score"]) == "pearson"
+
+
 def test_plan_falls_back_when_llm_breaks():
     df = build_df()
     report = profile_dataset(df)
@@ -139,3 +172,34 @@ def test_plan_rejects_unknown_variables():
     rq = ResearchQuestion(id="RQ1", question="q", variables=["ghost"])
     with pytest.raises(ValueError):
         generate_experiment_plan(rq, report, None)
+
+
+def test_rule_task_reorders_matching_questions():
+    df = build_df()
+    report = profile_dataset(df)
+    qs = generate_research_questions_rule(
+        df, report, max_questions=3, task="attendance_rate 如何影响 final_score"
+    )
+    assert qs
+    assert "attendance_rate" in qs[0].variables
+
+
+def test_rule_task_no_match_keeps_order():
+    df = build_df()
+    report = profile_dataset(df)
+    with_task = generate_research_questions_rule(
+        df, report, max_questions=3, task="完全无关的中文任务描述"
+    )
+    without_task = generate_research_questions_rule(df, report, max_questions=3)
+    assert [q.question for q in with_task] == [q.question for q in without_task]
+
+
+def test_llm_prompt_contains_task_constraint():
+    df = build_df()
+    report = profile_dataset(df)
+    fake = FakeLLM("[]")
+    with pytest.raises(ValueError):
+        generate_research_questions(df, report, fake, task="出勤率对成绩的影响")
+    assert fake.calls
+    assert "研究任务" in fake.calls[0][1]
+    assert "出勤率对成绩的影响" in fake.calls[0][1]

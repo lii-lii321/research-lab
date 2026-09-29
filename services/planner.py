@@ -3,22 +3,12 @@
 from __future__ import annotations
 
 from models.schemas import ExperimentPlan, ProfileReport, ResearchQuestion
+from services.executor import RUNNER_METHODS
 from services.llm import LLMClient, LLMError
 from utils.textjson import extract_json_object
 
-ALLOWED_METHODS = {
-    "pearson",
-    "spearman",
-    "independent_ttest",
-    "welch_ttest",
-    "mannwhitney",
-    "paired_ttest",
-    "anova",
-    "kruskal",
-    "chi2",
-    "linear_regression",
-    "logistic_regression",
-}
+# 与执行层单一来源：白名单不再单独维护，杜绝两边漂移
+ALLOWED_METHODS = RUNNER_METHODS
 
 _H0_H1 = {
     "pearson": ("两变量总体相关系数 ρ = 0", "ρ ≠ 0（存在线性相关）"),
@@ -49,18 +39,58 @@ PROMPT_TEMPLATE = """研究问题：{question}
 """
 
 
+SKEW_ALERT_FOR_RANK = 2.0
+
+
+def _abs_skew(col: object) -> float:
+    numeric = getattr(col, "numeric", None)
+    if numeric is None or numeric.skewness is None:
+        return 0.0
+    return abs(numeric.skewness)
+
+
 def suggest_method(report: ProfileReport, variables: list[str]) -> str:
-    """按变量类型确定统计方法的确定性规则（兜底与校验共用）。"""
+    """按变量类型与分布形态确定统计方法（兜底与校验共用）。
+
+    数值列偏度 |skew| ≥ 2 时优先秩方法（spearman / mannwhitney / kruskal），
+    消费 profiler 已产出的 SKEWED_DISTRIBUTION 信号而不是无视它。
+    """
     cols = {c.name: c for c in report.columns}
     selected = [cols[v] for v in variables if v in cols]
     numeric = [c for c in selected if c.type == "numeric"]
     categorical = [c for c in selected if c.type in ("categorical", "boolean")]
     if len(numeric) >= 2 and not categorical:
-        return "pearson" if len(numeric) == 2 else "linear_regression"
+        if len(numeric) == 2:
+            skewed = any(_abs_skew(c) >= SKEW_ALERT_FOR_RANK for c in numeric)
+            return "spearman" if skewed else "pearson"
+        return "linear_regression"
     if len(numeric) == 1 and categorical:
         k = max(c.n_unique for c in categorical)
-        return "welch_ttest" if k == 2 else "anova"
+        if k == 2:
+            skewed = any(_abs_skew(c) >= SKEW_ALERT_FOR_RANK for c in numeric)
+            return "mannwhitney" if skewed else "welch_ttest"
+        skewed = any(_abs_skew(c) >= SKEW_ALERT_FOR_RANK for c in numeric)
+        return "kruskal" if skewed else "anova"
     return "chi2"
+
+
+def method_fits_types(report: ProfileReport, variables: list[str], method: str) -> bool:
+    """校验 LLM 给出的方法与变量类型组合是否匹配（白名单之外的恒 False）。"""
+    cols = {c.name: c for c in report.columns}
+    selected = [cols[v] for v in variables if v in cols]
+    numeric = [c for c in selected if c.type == "numeric"]
+    categorical = [c for c in selected if c.type in ("categorical", "boolean")]
+    if method in ("pearson", "spearman", "paired_ttest"):
+        return len(numeric) == 2 and not categorical
+    if method in ("independent_ttest", "welch_ttest", "mannwhitney"):
+        return len(numeric) == 1 and len(categorical) == 1 and categorical[0].n_unique == 2
+    if method in ("anova", "kruskal"):
+        return len(numeric) == 1 and len(categorical) == 1 and categorical[0].n_unique >= 2
+    if method == "chi2":
+        return not numeric and len(categorical) >= 2
+    if method == "linear_regression":
+        return len(numeric) >= 1 and len(numeric) + len(categorical) >= 2
+    return False
 
 
 def _plan_from_dict(data: dict, rq: ResearchQuestion, variables: list[str]) -> ExperimentPlan:
@@ -127,6 +157,18 @@ def generate_experiment_plan(
                 plan.method = fallback
                 plan.notes = "；".join(
                     filter(None, [plan.notes, f"方法超出白名单，已按变量类型规则改用 {fallback}"])
+                )
+            elif not method_fits_types(report, variables, plan.method):
+                llm_method = plan.method
+                plan.method = fallback
+                plan.notes = "；".join(
+                    filter(
+                        None,
+                        [
+                            plan.notes,
+                            f"{llm_method} 与变量类型组合不符，已按规则改用 {fallback}",
+                        ],
+                    )
                 )
             return plan
     return _rule_plan(rq, variables, fallback)

@@ -11,6 +11,7 @@ from scipy import stats as sps
 
 from models.schemas import ExperimentPlan, ExperimentResult, GroupStat
 from services.llm import LLMClient, LLMError
+from services.tracking import TrackingStore
 
 CORRELATION_METHODS = {"pearson", "spearman"}
 PAIRED_METHODS = {"paired_ttest"}
@@ -321,6 +322,8 @@ _RUNNERS = {
     **{m: _run_regression for m in REGRESSION_METHODS},
 }
 
+RUNNER_METHODS = frozenset(_RUNNERS)
+
 
 def rule_interpretation(result: ExperimentResult, plan: ExperimentPlan) -> str:
     method_cn = METHOD_CN.get(plan.method, plan.method)
@@ -405,7 +408,11 @@ def llm_interpretation(result: ExperimentResult, plan: ExperimentPlan, client: L
 
 
 def run_experiment(
-    plan: ExperimentPlan, df: pd.DataFrame, client: LLMClient | None = None
+    plan: ExperimentPlan,
+    df: pd.DataFrame,
+    client: LLMClient | None = None,
+    store: TrackingStore | None = None,
+    dataset_name: str = "dataset",
 ) -> ExperimentResult:
     missing = [v for v in plan.variables if v not in df.columns]
     if missing:
@@ -425,6 +432,43 @@ def run_experiment(
     if result.p_value_raw is not None or result.p_value is not None:
         raw = result.p_value_raw if result.p_value_raw is not None else result.p_value
         result.decision = "reject_h0" if raw < plan.alpha else "fail_to_reject_h0"
+    if store is not None:
+        try:
+            store.track(
+                kind="stats",
+                task=plan.method,
+                dataset_name=dataset_name,
+                df=df,
+                feature_set={
+                    "variables": plan.variables,
+                    "alpha": plan.alpha,
+                    "question_id": plan.question_id,
+                },
+                models_results=[
+                    {
+                        "method": plan.method,
+                        "statistic": {"name": result.statistic_name, "value": result.statistic},
+                        "p_value": result.p_value,
+                        "effect_size": (
+                            {"name": result.effect_name, "value": result.effect_size}
+                            if result.effect_size is not None
+                            else None
+                        ),
+                        "decision": result.decision,
+                        "plan_source": plan.source,
+                    }
+                ],
+                target=None,
+                best_model=plan.method,
+                best_metric_name="p_value",
+                best_metric_value=(
+                    result.p_value_raw if result.p_value_raw is not None else result.p_value
+                ),
+                notes=plan.hypothesis,
+                runtime_seconds=0.0,
+            )
+        except Exception:
+            pass  # 追踪失败绝不影响实验结果本身
     if client is not None:
         try:
             result.interpretation = llm_interpretation(result, plan, client)

@@ -60,11 +60,13 @@ def rows_preview(df: pd.DataFrame, n: int = 3) -> str:
 
 
 def generate_research_questions(
-    df: pd.DataFrame, report: ProfileReport, client: LLMClient
+    df: pd.DataFrame, report: ProfileReport, client: LLMClient, task: str = ""
 ) -> list[ResearchQuestion]:
     prompt = PROMPT_TEMPLATE.format(
         profile_summary=summarize_profile(report), rows_preview=rows_preview(df)
     )
+    if task:
+        prompt = f"研究任务（提出的问题必须围绕它展开，不得偏题）：{task}\n\n" + prompt
     raw = client.chat(SYSTEM, prompt)
     items = extract_json_array(raw)[:RQ_MAX]
     known = set(map(str, df.columns))
@@ -82,10 +84,30 @@ def generate_research_questions(
     return valid
 
 
+def _matched_columns(report: ProfileReport, task: str) -> set[str]:
+    """任务描述中点名列出的列（英文名或下划线转空格形式）。"""
+    if not task:
+        return set()
+    t = task.lower()
+    matched: set[str] = set()
+    for c in report.columns:
+        for variant in (c.name.lower(), c.name.lower().replace("_", " ")):
+            if variant and variant in t:
+                matched.add(c.name)
+                break
+    return matched
+
+
 def generate_research_questions_rule(
-    df: pd.DataFrame, report: ProfileReport, max_questions: int = 4
+    df: pd.DataFrame,
+    report: ProfileReport,
+    max_questions: int = 4,
+    task: str = "",
 ) -> list[ResearchQuestion]:
-    """确定性规则提出研究问题：目标候选 × 变量类型 → 可检验的 RQ。"""
+    """确定性规则提出研究问题：目标候选 × 变量类型 → 可检验的 RQ。
+
+    task 中点名的列会被排到最前（触达任务的问题优先），无点名时保持原序。
+    """
     cols = {c.name: c for c in report.columns}
     candidates = [t.column for t in report.target_candidates]
     target = candidates[0] if candidates else next(
@@ -149,16 +171,31 @@ def generate_research_questions_rule(
                 numerics,
                 "相关分析",
             )
-    return questions
+    matched = _matched_columns(report, task)
+    if matched:
+        touching = [q for q in questions if any(v in matched for v in q.variables)]
+        questions = touching + [q for q in questions if q not in touching]
+        questions = [
+            ResearchQuestion(
+                id=f"RQ{i + 1}",
+                question=q.question,
+                rationale=q.rationale,
+                variables=q.variables,
+                suggested_method=q.suggested_method,
+                source=q.source,
+            )
+            for i, q in enumerate(questions)
+        ]
+    return questions[:max_questions]
 
 
 def generate_research_questions_auto(
-    df: pd.DataFrame, report: ProfileReport, client: LLMClient | None
+    df: pd.DataFrame, report: ProfileReport, client: LLMClient | None, task: str = ""
 ) -> list[ResearchQuestion]:
     """LLM 可用则用 LLM，失败或未配置时回退规则模式（source 标注来源）。"""
     if client is not None:
         try:
-            return generate_research_questions(df, report, client)
+            return generate_research_questions(df, report, client, task)
         except (LLMError, ValueError):
             pass
-    return generate_research_questions_rule(df, report)
+    return generate_research_questions_rule(df, report, task=task)

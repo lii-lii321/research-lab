@@ -15,6 +15,7 @@ from models.schemas import (
 )
 from services.executor import METHOD_CN, format_p
 from services.literature import snippet
+from services.repro import build_repro_script
 
 GENERATOR = "AI Data Research Lab v0.5.1"
 
@@ -264,6 +265,18 @@ def build_markdown(
             )
         lines.append("")
     lines += [f"- {item}" for item in LIMITATIONS]
+    repro_ok = [r for r in records if r.result.status == "ok"]
+    if repro_ok:
+        lines += ["", heading("附录：复现脚本"), ""]
+        for rec in repro_ok:
+            lines += [
+                f"**{rec.plan.experiment_id}**",
+                "",
+                "```python",
+                build_repro_script(rec.plan).rstrip(),
+                "```",
+                "",
+            ]
     lines += ["", "---", f"*本报告由 {GENERATOR} 生成。*"]
     return "\n".join(lines)
 
@@ -460,6 +473,14 @@ def build_html(
             )
         parts.append("</table>")
     parts.append("<ul>" + "".join(f"<li>{_esc(item)}</li>" for item in LIMITATIONS) + "</ul>")
+    repro_ok = [r for r in records if r.result.status == "ok"]
+    if repro_ok:
+        parts.append(heading("附录：复现脚本"))
+        for rec in repro_ok:
+            parts.append(
+                f"<p><b>{_esc(rec.plan.experiment_id)}</b></p>"
+                f"<pre>{_esc(build_repro_script(rec.plan))}</pre>"
+            )
     parts.append(f"<hr><p class=\"meta\">本报告由 {GENERATOR} 生成。</p></div></body></html>")
     return "".join(parts)
 

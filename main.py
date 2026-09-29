@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """AI Data Research Lab — FastAPI 入口。"""
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,10 +10,17 @@ from routers.ml import router as ml_router
 from routers.profile import router as profile_router
 from routers.research import router as research_router
 
-app = FastAPI(title="AI Data Research Lab", version="0.5.1")
+app = FastAPI(title="AI Data Research Lab", version="0.6.0")
+
+# CORS 默认只放行本地 Streamlit，可用 RESEARCH_LAB_CORS 覆盖（逗号分隔）
+_CORS_ORIGINS = [
+    o.strip()
+    for o in os.getenv("RESEARCH_LAB_CORS", "http://localhost:8501,http://127.0.0.1:8501").split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -23,4 +32,4 @@ app.include_router(agent_router)
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "ai-data-research-lab", "version": "0.5.1"}
+    return {"status": "ok", "service": "ai-data-research-lab", "version": "0.6.0"}
