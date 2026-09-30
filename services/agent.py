@@ -32,6 +32,7 @@ def run_research_agent(
     store: TrackingStore | None = None,
     dataset_name: str = "dataset",
     enable_literature: bool = True,
+    enable_ml: bool = True,
 ) -> AgentRunResult:
     started = time.perf_counter()
     steps: list[AgentStep] = []
@@ -121,7 +122,8 @@ def run_research_agent(
     ok_questions = step("研究问题", do_questions)
     if ok_questions and questions:
         step("统计实验", do_experiments)
-    step("ML 基线", do_ml)
+    if enable_ml:
+        step("ML 基线", do_ml)
     if enable_literature:
         step("文献检索", do_literature)
     step("研究报告", do_report)

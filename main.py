@@ -8,9 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers.agent import router as agent_router
 from routers.ml import router as ml_router
 from routers.profile import router as profile_router
+from routers.reports import router as reports_router
 from routers.research import router as research_router
 
-app = FastAPI(title="AI Data Research Lab", version="0.6.0")
+app = FastAPI(title="AI Data Research Lab", version="0.7.0")
 
 # CORS 默认只放行本地 Streamlit，可用 RESEARCH_LAB_CORS 覆盖（逗号分隔）
 _CORS_ORIGINS = [
@@ -28,8 +29,9 @@ app.include_router(profile_router)
 app.include_router(research_router)
 app.include_router(ml_router)
 app.include_router(agent_router)
+app.include_router(reports_router)
 
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "ai-data-research-lab", "version": "0.6.0"}
+    return {"status": "ok", "service": "ai-data-research-lab", "version": "0.7.0"}

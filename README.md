@@ -4,6 +4,18 @@
 
 从一份 CSV 到一份**可复现的研究报告**：数据画像 → 研究问题 → 实验计划 → 统计检验 → ML 基线 → 文献检索 → 报告导出，全自动串联。
 
+## 为谁设计
+
+- **数据科学学生**——拿到课程作业 / Kaggle 数据的第一小时不知从哪开始：上传即得数据画像、可检验的研究问题与真实执行的统计检验，报告可直接进作业附录。
+- **需要快速出结论的研究者**——每个检验有前提校验、效应量、BH 校正与可复现脚本，论文方法论章节可直接引用。
+- **评审者与面试官**——方法白名单、来源标注（llm/rule）、原始 p 值入库、复现脚本，是"懂统计的 AI 工具"最完整的展示面。
+
+## 三个使用入口
+
+1. **界面**：`streamlit run app.py` —— 五个标签页覆盖全流程，报告沉淀在 ⑤ 报告库
+2. **命令行**：`python cli.py analyze data.csv --task "hours 与 score 的关系"` —— 接进终端与脚本管道
+3. **Python API**：`from services.profiler import profile_dataset` —— 在 Notebook 里自由组合服务层（见 [examples/api_demo.py](examples/api_demo.py)）
+
 **核心理念：AI 只负责提出计划与解释结果，所有数字来自真实执行的代码。** 三道闸保证这一点：
 
 1. **计划层**——LLM 提出的统计方法必须在白名单内（与执行层同一来源）、必须匹配变量类型组合，不符则按规则降级并留痕（[ADR-0001](docs/adr-0001-method-whitelist-over-codegen-sandbox.md)）；
@@ -29,12 +41,21 @@
 
 ```bash
 python -m venv .venv
-.venv\Scripts\python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+.venv\Scripts\python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple   # macOS/Linux: .venv/bin/python
 
 .venv\Scripts\python scripts\generate_sample.py        # 生成示例数据
 .venv\Scripts\python -m streamlit run app.py           # 界面 http://localhost:8501
 .venv\Scripts\python -m uvicorn main:app --port 8000   # API 文档 http://localhost:8000/docs
 .venv\Scripts\python -m pytest -q                      # 测试
+```
+
+命令行用法（零配置即可跑，规则模式不需要 Key）：
+
+```bash
+python cli.py profile data.csv                                   # 30 秒看懂一份数据
+python cli.py analyze data.csv --task "hours 与 score 的关系"     # 一句话任务 → 全流程报告
+python cli.py experiments                                        # 回看所有实验
+python cli.py reports                                            # 回看所有报告
 ```
 
 ## Docker

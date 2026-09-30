@@ -17,6 +17,7 @@ from services.planner import generate_experiment_plan
 from services.profiler import profile_dataset
 from services.report import build_report
 from services.repro import build_repro_script
+from services.reports_store import get_report, list_reports, save_report
 from services.research_questions import generate_research_questions_auto
 from services.tracking import TrackingStore
 from utils.charts import correlation_heatmap, result_figure
@@ -286,14 +287,19 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
                 history,
                 st.session_state.get("ml_result"),
             )
+            saved = save_report(
+                st.session_state.get("dataset_name", "dataset").rsplit(".", 1)[0] or "report",
+                markdown,
+                html_doc,
+            )
             st.session_state["report"] = {
                 "md": markdown,
                 "html": html_doc,
-                "name": st.session_state.get("dataset_name", "dataset").rsplit(".", 1)[0]
-                or "report",
+                "name": saved["name"],
             }
     rep = st.session_state.get("report")
     if rep:
+        st.caption(f"报告已沉淀到报告库：{rep['name']}（可在 ⑤ 报告库 回看）")
         dl_md, dl_html = st.columns(2)
         dl_md.download_button(
             "下载报告（.md）",
@@ -433,6 +439,63 @@ def render_tracking() -> None:
             st.line_chart(trend)
 
 
+def render_agent_timeline(result) -> None:
+    st.subheader("执行时间线")
+    icon = {"ok": "✅", "failed": "⚠️"}
+    for s in result.steps:
+        st.markdown(f"- {icon[s.status]} **{s.name}**（{s.seconds}s）— {s.detail}")
+
+
+def render_agent_report_downloads(result, key_prefix: str) -> None:
+    dl_md, dl_html = st.columns(2)
+    dl_md.download_button(
+        "下载报告（.md）",
+        data=result.report_markdown,
+        file_name=f"{result.filename_base}_report.md",
+        mime="text/markdown",
+        key=f"{key_prefix}_dl_md",
+    )
+    dl_html.download_button(
+        "下载报告（.html）",
+        data=result.report_html,
+        file_name=f"{result.filename_base}_report.html",
+        mime="text/html",
+        key=f"{key_prefix}_dl_html",
+    )
+    with st.expander("报告预览（Markdown）", expanded=False):
+        st.markdown(result.report_markdown)
+
+
+def render_reports() -> None:
+    st.subheader("报告库")
+    st.caption(
+        "生成的研究报告自动沉淀在 `data/reports/`（跨会话可回看），"
+        "分析流程、自动研究与命令行 cli.py 产出的报告都会汇集到这里。"
+    )
+    items = list_reports()
+    if not items:
+        st.info("还没有报告——在 ① 分析流程 或 ④ 自动研究 生成一份，或用命令行：`python cli.py analyze data.csv`")
+        return
+    names = [i["name"] for i in items]
+    pick = st.selectbox("选择报告", names, key="reports_pick")
+    detail = get_report(pick)
+    if detail is None:
+        st.warning("报告文件读取失败")
+        return
+    meta = next(i for i in items if i["name"] == pick)
+    st.caption(f"修改于 {meta['modified']} · {meta['size_bytes']:,} 字符")
+    dl_md, dl_html = st.columns(2)
+    dl_md.download_button(
+        "下载 .md", detail["markdown"], file_name=f"{pick}.md", mime="text/markdown", key="reports_dl_md"
+    )
+    if detail["html"]:
+        dl_html.download_button(
+            "下载 .html", detail["html"], file_name=f"{pick}.html", mime="text/html", key="reports_dl_html"
+        )
+    with st.expander("报告预览", expanded=True):
+        st.markdown(detail["markdown"])
+
+
 def render_agent(df: pd.DataFrame, report: ProfileReport) -> None:
     st.subheader("自动研究 Agent")
     st.caption(
@@ -468,32 +531,17 @@ def render_agent(df: pd.DataFrame, report: ProfileReport) -> None:
             f"完成：{len(result.questions)} 个研究问题 · {len(result.records)} 个统计实验 · "
             f"ML 最佳 {ml_desc} · 总耗时 {result.runtime_seconds} 秒"
         )
-        st.subheader("执行时间线")
-        icon = {"ok": "✅", "failed": "⚠️"}
-        for s in result.steps:
-            st.markdown(f"- {icon[s.status]} **{s.name}**（{s.seconds}s）— {s.detail}")
+        render_agent_timeline(result)
+        saved = save_report(
+            f"{result.filename_base}_agent", result.report_markdown, result.report_html
+        )
+        st.caption(f"报告已沉淀到报告库：{saved['name']}")
     if result.references:
         with st.expander(f"引用文献（{len(result.references)} 篇）", expanded=False):
             for p in result.references:
                 st.markdown(f"- **{p.title}**（{p.year}）— {p.url}")
     if result.report_markdown:
-        dl_md, dl_html = st.columns(2)
-        dl_md.download_button(
-            "下载报告（.md）",
-            data=result.report_markdown,
-            file_name=f"{result.filename_base}_agent_report.md",
-            mime="text/markdown",
-            key="agent_dl_md",
-        )
-        dl_html.download_button(
-            "下载报告（.html）",
-            data=result.report_html,
-            file_name=f"{result.filename_base}_agent_report.html",
-            mime="text/html",
-            key="agent_dl_html",
-        )
-        with st.expander("报告预览（Markdown）", expanded=False):
-            st.markdown(result.report_markdown)
+        render_agent_report_downloads(result, "agent")
 
 
 def main() -> None:
@@ -516,11 +564,40 @@ def main() -> None:
     data_sig = (report.dataset.n_rows, report.dataset.n_cols, report.dataset.missing_cells)
     if st.session_state.get("data_sig") != data_sig:
         st.session_state["data_sig"] = data_sig
-        for key in ("rqs", "plan", "result", "history", "report", "ml_result", "agent_result"):
+        for key in ("rqs", "plan", "result", "history", "report", "ml_result", "agent_result", "demo_result"):
             st.session_state.pop(key, None)
 
-    tab_flow, tab_ml, tab_track, tab_agent = st.tabs(
-        ["① 分析流程", "② ML 实验室", "③ 实验追踪", "④ 自动研究"]
+    with st.sidebar:
+        st.divider()
+        run_demo = st.button("🚀 一键体验完整流程", type="primary", use_container_width=True)
+    if run_demo:
+        with st.spinner("自动完成：画像 → 研究问题 → 统计实验 → ML → 文献 → 报告…"):
+            st.session_state["demo_result"] = run_research_agent(
+                df,
+                report,
+                task_description="研究影响学生成绩的关键因素",
+                max_questions=2,
+                client=get_llm_client(),
+                store=TrackingStore(),
+                dataset_name=st.session_state.get("dataset_name", "dataset"),
+            )
+    demo_result = st.session_state.get("demo_result")
+    if demo_result and demo_result.status == "ok":
+        with st.container(border=True):
+            st.markdown("#### 🚀 一键体验完成")
+            st.markdown(
+                f"{len(demo_result.questions)} 个研究问题 · {len(demo_result.records)} 个统计实验 · "
+                "报告已生成 —— 可调参数见 ④ 自动研究，沉淀记录见 ⑤ 报告库"
+            )
+            render_agent_timeline(demo_result)
+            saved = save_report(
+                f"{demo_result.filename_base}_demo", demo_result.report_markdown, demo_result.report_html
+            )
+            st.caption(f"报告已沉淀：{saved['name']}")
+            render_agent_report_downloads(demo_result, "demo")
+
+    tab_flow, tab_ml, tab_track, tab_agent, tab_reports = st.tabs(
+        ["① 分析流程", "② ML 实验室", "③ 实验追踪", "④ 自动研究", "⑤ 报告库"]
     )
     with tab_flow:
         render_flow(df, report)
@@ -530,6 +607,8 @@ def main() -> None:
         render_tracking()
     with tab_agent:
         render_agent(df, report)
+    with tab_reports:
+        render_reports()
 
 
 if __name__ == "__main__":
