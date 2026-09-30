@@ -189,7 +189,10 @@ def _run_group_compare(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResu
         res = sps.kruskal(*arrays)
         k_groups = len(arrays)
         n_total = int(sum(a.size for a in arrays))
-        epsilon_sq = (float(res.statistic) - k_groups + 1.0) / (n_total - k_groups)
+        denom = n_total - k_groups
+        epsilon_sq = (
+            (float(res.statistic) - k_groups + 1.0) / denom if denom > 0 else None
+        )
         stat_name, effect, effect_name = "H", epsilon_sq, "ε²"
     raw_p = float(res.pvalue)
     stat, p = _round(res.statistic), _round(raw_p)
@@ -424,7 +427,11 @@ def run_experiment(
     runner = _RUNNERS.get(plan.method)
     if runner is None:
         return _failed(plan, f"暂不支持的方法：{plan.method}")
-    result = runner(plan, df)
+    try:
+        result = runner(plan, df)
+    except (ValueError, ZeroDivisionError) as exc:
+        # scipy 对全同值/退化样本会抛异常（如 kruskal），转为干净的 failed 而非 500
+        result = _failed(plan, f"检验无法计算：{exc}")
     if result.status != "ok":
         result.interpretation = result.reason
         result.interpretation_source = "none"

@@ -289,3 +289,21 @@ def test_rule_interpretation_contains_real_numbers():
     result = run_experiment(make_plan("pearson", ["x", "y"]), df)
     assert f"{result.statistic:.3f}" in result.interpretation
     assert "p < 0.001" in result.interpretation or "p =" in result.interpretation
+
+
+def test_kruskal_degenerate_single_obs_groups():
+    # 每组仅 1 条：H/p 有效但 ε² 分母为 0 —— 不崩溃，效应量优雅置空
+    df = pd.DataFrame({"g": ["A", "B"], "v": [1.0, 2.0]})
+    result = run_experiment(make_plan("kruskal", ["g", "v"]), df)
+    assert result.status == "ok"
+    assert result.statistic_name == "H"
+    assert result.effect_size is None
+
+
+def test_kruskal_all_identical_returns_failed_not_crash():
+    # scipy 对全同值样本抛 ValueError —— 转为干净 failed 而非 500
+    df = pd.DataFrame({"g": ["A"] * 10 + ["B"] * 10, "v": [5.0] * 20})
+    result = run_experiment(make_plan("kruskal", ["g", "v"]), df)
+    assert result.status == "failed"
+    assert "无法计算" in result.reason
+    assert result.interpretation == result.reason
