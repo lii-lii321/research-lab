@@ -24,8 +24,38 @@ def ok_handler(request: httpx.Request) -> httpx.Response:
 
 
 def test_chat_success_returns_content(monkeypatch):
+    monkeypatch.setattr(llm_module.time, "sleep", lambda _s: None)
     client = make_client(monkeypatch, ok_handler)
     assert client.chat("system", "user") == "好的，解读如下"
+
+
+def test_retry_on_503_then_success(monkeypatch):
+    calls = {"n": 0}
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(503, text="overloaded")
+        return ok_handler(request)
+
+    monkeypatch.setattr(llm_module.time, "sleep", lambda _s: None)
+    client = make_client(monkeypatch, flaky)
+    assert client.chat("s", "u") == "好的，解读如下"
+    assert calls["n"] == 2
+
+
+def test_retry_exhausted_raises(monkeypatch):
+    calls = {"n": 0}
+
+    def always_503(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(503, text="overloaded")
+
+    monkeypatch.setattr(llm_module.time, "sleep", lambda _s: None)
+    client = make_client(monkeypatch, always_503)
+    with pytest.raises(LLMError, match="503"):
+        client.chat("s", "u")
+    assert calls["n"] == 3  # MAX_ATTEMPTS
 
 
 def test_non_200_raises_llm_error(monkeypatch):

@@ -233,6 +233,21 @@ def build_markdown(
             if ml_result.excluded:
                 excluded_desc = "；".join(f"{e.column}（{e.reason}）" for e in ml_result.excluded)
                 lines.append(f"- 已排除特征：{_md(excluded_desc)}")
+            if ml_result.tuning_note:
+                lines.append(f"- 调优：{_md(ml_result.tuning_note)}")
+            if ml_result.feature_importance:
+                lines += ["", "**特征重要性（permutation，top 10）**", ""]
+                lines += [f"- {_md(i.feature)}：{i.importance}" for i in ml_result.feature_importance]
+            lines += [
+                "",
+                "**模型卡片**",
+                "",
+                f"- 数据指纹：{ml_result.dataset_fingerprint[:8]}　"
+                f"任务：{_md(TASK_CN.get(ml_result.task, ml_result.task))}　目标：{_md(target_desc)}",
+                f"- 规模：训练/测试 {ml_result.n_train}/{ml_result.n_test}　"
+                f"特征：数值 {len(ml_result.features_numeric)} + 类别 {len(ml_result.features_categorical)}",
+                "- 局限：基线模型不构成因果解释；样本量与类别平衡情况见数据画像与质量提示。",
+            ]
     if references:
         lines += [
             "",
@@ -443,6 +458,25 @@ def build_html(
             if ml_result.excluded:
                 excluded_desc = "；".join(f"{e.column}（{e.reason}）" for e in ml_result.excluded)
                 parts.append(f"<p class=\"meta\">已排除特征：{_esc(excluded_desc)}</p>")
+            if ml_result.tuning_note:
+                parts.append(f"<p class=\"meta\">调优：{_esc(ml_result.tuning_note)}</p>")
+            if ml_result.feature_importance:
+                parts.append(
+                    "<p><b>特征重要性（permutation，top 10）</b></p>"
+                    "<table><tr><th>特征</th><th>重要性</th></tr>"
+                )
+                for i in ml_result.feature_importance:
+                    parts.append(f"<tr><td>{_esc(i.feature)}</td><td>{i.importance}</td></tr>")
+                parts.append("</table>")
+            parts.append("<h3>模型卡片</h3><ul>")
+            parts.append(
+                f"<li>数据指纹：{fingerprint}　任务：{_esc(TASK_CN.get(ml_result.task, ml_result.task))}　"
+                f"目标：{_esc(target_desc)}</li>"
+                f"<li>规模：训练/测试 {ml_result.n_train}/{ml_result.n_test}　"
+                f"特征：数值 {len(ml_result.features_numeric)} + 类别 {len(ml_result.features_categorical)}</li>"
+                "<li>局限：基线模型不构成因果解释；样本量与类别平衡情况见数据画像与质量提示。</li>"
+            )
+            parts.append("</ul>")
     if references:
         parts.append(heading("相关工作（文献引用）"))
         parts.append(

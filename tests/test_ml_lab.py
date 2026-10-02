@@ -35,6 +35,40 @@ def build_classification_df(n: int = 80) -> pd.DataFrame:
     )
 
 
+def test_tuning_persistence_and_importance(tmp_path):
+    """非线性关系 → 树模型胜出并被调优；模型持久化可重载预测；产出特征重要性。"""
+    import joblib
+
+    from services.tracking import TrackingStore
+
+    rng = np.random.default_rng(3)
+    df = pd.DataFrame({"x1": rng.uniform(0, 10, 120), "x2": rng.uniform(0, 10, 120)})
+    df["y"] = np.round(df["x1"] * df["x2"] / 10 + rng.normal(0, 0.5, 120), 2)
+    profile = profile_dataset(df)
+    store = TrackingStore(tmp_path / "ml.db")
+    result = run_ml_experiment(
+        df, profile, target="y", task="regression",
+        store=store, dataset_name="nl.csv", persist_dir=tmp_path / "models",
+    )
+    assert result.status == "ok"
+    best = next(m for m in result.models if m.model == result.best_model)
+    assert "cv_best" in best.params  # 最佳为可调优树模型且已调优
+    assert result.feature_importance and result.tuning_note
+    model_files = list((tmp_path / "models").glob("*.joblib"))
+    assert len(model_files) == 1
+    loaded = joblib.load(model_files[0])
+    pred = loaded["pipeline"].predict(df[["x1", "x2"]].head(3))
+    assert len(pred) == 3
+
+
+def test_linear_best_skips_tuning():
+    df = build_regression_df()
+    profile = profile_dataset(df)
+    result = run_ml_experiment(df, profile, target="score", task="regression")
+    assert result.best_model == "LinearRegression"
+    assert "跳过调优" in result.tuning_note
+
+
 def test_regression_baseline():
     df = build_regression_df()
     profile = profile_dataset(df)

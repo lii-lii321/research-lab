@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+import secrets
+import time
 from pathlib import Path
 
 import httpx
@@ -13,6 +15,8 @@ load_dotenv(ROOT / ".env")
 DEFAULT_BASE_URL = "https://api.siliconflow.cn/v1"
 DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 REQUEST_TIMEOUT = 60.0
+MAX_ATTEMPTS = 3
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
 class LLMError(RuntimeError):
@@ -52,21 +56,31 @@ class LLMClient:
             ],
             "temperature": temperature,
         }
-        try:
-            resp = httpx.post(
-                url,
-                json=payload,
-                headers={"Authorization": f"Bearer {self.config.api_key}"},
-                timeout=self.timeout,
-            )
-        except httpx.HTTPError as exc:
-            raise LLMError(f"LLM 请求失败：{exc}") from exc
-        if resp.status_code != 200:
-            raise LLMError(f"LLM 返回 HTTP {resp.status_code}：{resp.text[:200]}")
-        try:
-            return resp.json()["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, ValueError) as exc:
-            raise LLMError(f"LLM 响应格式异常：{resp.text[:200]}") from exc
+        last_error: LLMError | None = None
+        for attempt in range(MAX_ATTEMPTS):
+            try:
+                resp = httpx.post(
+                    url,
+                    json=payload,
+                    headers={"Authorization": f"Bearer {self.config.api_key}"},
+                    timeout=self.timeout,
+                )
+            except httpx.HTTPError as exc:
+                last_error = LLMError(f"LLM 请求失败：{exc}")
+                if attempt < MAX_ATTEMPTS - 1:
+                    time.sleep(0.5 * 2**attempt + secrets.randbelow(250) / 1000)
+                    continue
+                raise last_error from exc
+            if resp.status_code in RETRYABLE_STATUS and attempt < MAX_ATTEMPTS - 1:
+                time.sleep(0.5 * 2**attempt + secrets.randbelow(250) / 1000)
+                continue
+            if resp.status_code != 200:
+                raise LLMError(f"LLM 返回 HTTP {resp.status_code}：{resp.text[:200]}")
+            try:
+                return resp.json()["choices"][0]["message"]["content"]
+            except (KeyError, IndexError, ValueError) as exc:
+                raise LLMError(f"LLM 响应格式异常：{resp.text[:200]}") from exc
+        raise last_error or LLMError("LLM 请求失败：重试耗尽")
 
 
 def get_llm_client() -> LLMClient | None:

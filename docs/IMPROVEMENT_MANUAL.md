@@ -1,4 +1,4 @@
-# research-lab 提升方案与落实手册
+﻿# research-lab 提升方案与落实手册
 
 > 基线：v0.7.0（145 tests 绿、双 CI job、11 API、五标签页 UI）
 > 编制：2026-10-01 · 维护方式：每完成一条目打勾并在 CHANGELOG 记录版本
@@ -301,9 +301,9 @@ for attempt in range(3):
 - [x] D2 pip-compile 锁定依赖
 - [x] D3 README 测试数字去漂移
 - [x] A1 statsmodels：CI+诊断+功效（≥5 新用例）
-- [ ] B1 调优-持久化-解释三件套
-- [ ] B2 自动模型卡片
-- [ ] E2 LLM 指数退避重试
+- [x] B1 调优-持久化-解释三件套
+- [x] B2 自动模型卡片
+- [x] E2 LLM 指数退避重试
 - [ ] E1 golden 评测集（CI）+ eval_llm 脚本
 - [ ] F1 报告配图（直方图+缺失矩阵）
 - [ ] F2 八类告警处置建议
@@ -312,3 +312,4 @@ for attempt in range(3):
 - [ ] H1 README.en + mermaid + demo GIF
 
 > 完成即 v1.0.0：打 tag、发 Release（附 demo GIF 与论文复现链接），简历项目描述更新为"统计闭环 + ML 纵深 + 论文复现 + 全链路可溯源"。
+

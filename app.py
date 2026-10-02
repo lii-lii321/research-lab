@@ -344,6 +344,7 @@ def render_ml_lab(df: pd.DataFrame, report: ProfileReport) -> None:
                     task=sel_task,
                     store=TrackingStore(),
                     dataset_name=st.session_state.get("dataset_name", "dataset"),
+                    persist_dir="data/models",
                 )
             except ValueError as exc:
                 st.error(f"无法运行：{exc}")
@@ -378,6 +379,15 @@ def render_ml_lab(df: pd.DataFrame, report: ProfileReport) -> None:
         ]
     )
     st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+    if result.tuning_note:
+        st.caption(f"调优：{result.tuning_note}")
+    if result.feature_importance:
+        st.subheader("特征重要性（permutation）")
+        st.bar_chart(
+            pd.DataFrame(
+                [{"特征": i.feature, "重要性": i.importance} for i in result.feature_importance]
+            ).set_index("特征")
+        )
     if result.task == "clustering" and result.cluster_sizes:
         st.caption("簇规模：" + "、".join(f"{k}：{v}" for k, v in result.cluster_sizes.items()))
     if result.excluded:

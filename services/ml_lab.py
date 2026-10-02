@@ -1,7 +1,8 @@
-"""ML 基线实验：特征守门、自动任务推断、多模型真实训练与指标对比。"""
+﻿"""ML 基线实验：特征守门、自动任务推断、多模型真实训练与指标对比。"""
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -26,17 +27,26 @@ from sklearn.model_selection import KFold, StratifiedKFold, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 
+from models.schemas import (
+    ExcludedFeature,
+    FeatureImportanceItem,
+    MLExperimentResult,
+    MLModelResult,
+)
+from services.tracking import TrackingStore, dataframe_fingerprint
+
 try:
     from xgboost import XGBClassifier, XGBRegressor
+
+    XGB_AVAILABLE = True
 except ImportError:
-    XGBClassifier = XGBRegressor = None  # type: ignore[misc,assignment]
+    XGB_AVAILABLE = False
 try:
     from lightgbm import LGBMClassifier, LGBMRegressor
-except ImportError:
-    LGBMClassifier = LGBMRegressor = None  # type: ignore[misc,assignment]
 
-from models.schemas import ExcludedFeature, MLExperimentResult, MLModelResult
-from services.tracking import TrackingStore, dataframe_fingerprint
+    LGBM_AVAILABLE = True
+except ImportError:
+    LGBM_AVAILABLE = False
 
 SEED = 42
 TEST_SIZE = 0.2
@@ -63,7 +73,7 @@ def _regression_models():
             {"n_estimators": 100},
         ),
     ]
-    if XGBRegressor is not None:
+    if XGB_AVAILABLE:
         models.append(
             (
                 "XGBoost",
@@ -74,7 +84,7 @@ def _regression_models():
                 {"n_estimators": 200, "max_depth": 4, "learning_rate": 0.1},
             )
         )
-    if LGBMRegressor is not None:
+    if LGBM_AVAILABLE:
         models.append(
             (
                 "LightGBM",
@@ -83,6 +93,39 @@ def _regression_models():
             )
         )
     return models
+
+
+_PARAM_GRIDS: dict[str, dict[str, list]] = {
+    "LogisticRegression": {"C": [0.1, 1.0, 10.0]},
+    "RandomForest": {"n_estimators": [100, 300], "max_depth": [None, 10]},
+    "XGBoost": {"max_depth": [3, 5], "learning_rate": [0.05, 0.1]},
+    "LightGBM": {"learning_rate": [0.05, 0.1]},
+}
+
+
+def _fresh_model(name: str, task: str):
+    """调优时按名重建同款未拟合模型。"""
+    if task == "regression":
+        makers = {
+            "LinearRegression": lambda: LinearRegression(),
+            "RandomForest": lambda: RandomForestRegressor(n_estimators=100, random_state=SEED, n_jobs=-1),
+            "XGBoost": lambda: XGBRegressor(
+                n_estimators=200, max_depth=4, learning_rate=0.1,
+                random_state=SEED, n_jobs=-1, verbosity=0,
+            ),
+            "LightGBM": lambda: LGBMRegressor(n_estimators=200, random_state=SEED, n_jobs=-1, verbose=-1),
+        }
+    else:
+        makers = {
+            "LogisticRegression": lambda: LogisticRegression(max_iter=500),
+            "RandomForest": lambda: RandomForestClassifier(n_estimators=100, random_state=SEED, n_jobs=-1),
+            "XGBoost": lambda: XGBClassifier(
+                n_estimators=200, max_depth=4, learning_rate=0.1,
+                random_state=SEED, n_jobs=-1, verbosity=0,
+            ),
+            "LightGBM": lambda: LGBMClassifier(n_estimators=200, random_state=SEED, n_jobs=-1, verbose=-1),
+        }
+    return makers[name]()
 
 
 def _classification_models():
@@ -94,7 +137,7 @@ def _classification_models():
             {"n_estimators": 100},
         ),
     ]
-    if XGBClassifier is not None:
+    if XGB_AVAILABLE:
         models.append(
             (
                 "XGBoost",
@@ -105,7 +148,7 @@ def _classification_models():
                 {"n_estimators": 200, "max_depth": 4, "learning_rate": 0.1},
             )
         )
-    if LGBMClassifier is not None:
+    if LGBM_AVAILABLE:
         models.append(
             (
                 "LightGBM",
@@ -271,12 +314,14 @@ def _run_supervised(df: pd.DataFrame, task: str, target: str, numeric: list[str]
     use_cv = cv_k >= 2
     preprocessor = _preprocessor(numeric, categorical)
     results: list[MLModelResult] = []
+    fitted_pipelines: dict[str, Pipeline] = {}
     for name, estimator, params in (
         _regression_models() if task == "regression" else _classification_models()
     ):
         pipe = Pipeline([("prep", preprocessor), ("model", estimator)])
         started = time.perf_counter()
         pipe.fit(X_train, y_train)
+        fitted_pipelines[name] = pipe
         pred = pipe.predict(X_test)
         proba = pipe.predict_proba(X_test)[:, 1] if n_classes == 2 else None
         seconds = time.perf_counter() - started
@@ -297,7 +342,61 @@ def _run_supervised(df: pd.DataFrame, task: str, target: str, numeric: list[str]
                 train_seconds=round(seconds, 3),
             )
         )
-    return results, int(len(X_train)), int(len(X_test))
+
+    # 小网格调优：只调基线最佳且可调优的模型；网格小而精，防运行时爆炸
+    best_metric_name_local = "R2" if task == "regression" else "F1_macro"
+    best_result = max(results, key=lambda m: m.metrics.get(best_metric_name_local, float("-inf")))
+    grid = _PARAM_GRIDS.get(best_result.model)
+    tuned_pipeline: Pipeline | None = None
+    if grid is None:
+        tuning_note = "线性模型无超参数，跳过调优"
+    elif len(X_train) < 50:
+        tuning_note = "训练样本不足 50，跳过调优"
+    else:
+        from sklearn.model_selection import GridSearchCV
+
+        scoring = "r2" if task == "regression" else "f1_macro"
+        if task == "classification":
+            splitter = StratifiedKFold(n_splits=cv_k, shuffle=True, random_state=SEED)
+        else:
+            splitter = KFold(n_splits=cv_k, shuffle=True, random_state=SEED)
+        search = GridSearchCV(
+            Pipeline([("prep", _preprocessor(numeric, categorical)), ("model", _fresh_model(best_result.model, task))]),
+            {f"model__{k}": v for k, v in (grid or {}).items()},
+            cv=splitter,
+            scoring=scoring,
+            n_jobs=-1,
+            refit=True,
+        )
+        search.fit(X_train, y_train)
+        tuned_cv = float(search.best_score_)
+        base_cv = best_result.metrics.get(
+            f"{best_metric_name_local}_CV", best_result.metrics.get(best_metric_name_local, float("-inf"))
+        )
+        if tuned_cv >= base_cv - 0.05:
+            best_result.params = {
+                **best_result.params,
+                "cv_best": {k.split("__", 1)[-1]: v for k, v in search.best_params_.items()},
+            }
+            tuned_pipeline = search.best_estimator_
+            tuned_pred = search.predict(X_test)
+            tuned_proba = search.predict_proba(X_test)[:, 1] if n_classes == 2 else None
+            best_result.metrics.update(_supervised_metrics(task, y_test, tuned_pred, tuned_proba, n_classes))
+            best_result.metrics[f"{best_metric_name_local}_CV"] = round(tuned_cv, 4)
+            tuning_note = f"小网格调优生效：{search.best_params_}"
+        else:
+            tuning_note = f"调优未见提升（{tuned_cv:.4f} < 基线 {base_cv:.4f}），保留基线参数"
+
+    best_pipeline = tuned_pipeline if tuned_pipeline is not None else fitted_pipelines.get(best_result.model)
+    return {
+        "results": results,
+        "n_train": int(len(X_train)),
+        "n_test": int(len(X_test)),
+        "tuning_note": tuning_note,
+        "pipeline": best_pipeline,
+        "X_test": X_test,
+        "y_test": y_test,
+    }
 
 
 def _run_clustering(df: pd.DataFrame, numeric: list[str]):
@@ -338,12 +437,15 @@ def run_ml_experiment(
     task: str = "auto",
     store: TrackingStore | None = None,
     dataset_name: str = "dataset",
+    persist_dir: str | Path | None = None,
 ) -> MLExperimentResult:
     started = time.perf_counter()
     if task not in TASKS:
         raise ValueError(f"未知任务类型：{task}（可选 {' / '.join(TASKS)}）")
     if task == "auto":
         task = infer_task(profile, target) if target else "clustering"
+    bundle: dict | None = None
+    tuning_note = ""
     if task == "clustering":
         target = None
         numeric, categorical, excluded = select_features(df, profile, None)
@@ -362,9 +464,12 @@ def run_ml_experiment(
         if not numeric + categorical:
             return _failed(task, "没有可用特征（标识符 / 高缺失 / 文本列被排除）")
         try:
-            models, n_train, n_test = _run_supervised(df, task, target, numeric, categorical)
+            bundle = _run_supervised(df, task, target, numeric, categorical)
         except DataProblem as exc:
             return _failed(task, str(exc))
+        models = bundle["results"]
+        n_train, n_test = bundle["n_train"], bundle["n_test"]
+        tuning_note = bundle["tuning_note"]
         k = None
         sizes = {}
         best_metric_name = "R2" if task == "regression" else "F1_macro"
@@ -372,6 +477,27 @@ def run_ml_experiment(
     cv_key = f"{best_metric_name}_CV"
     key_metric = cv_key if any(cv_key in m.metrics for m in models) else best_metric_name
     best = max(models, key=lambda m: m.metrics.get(key_metric, float("-inf")))
+    feature_importance: list[FeatureImportanceItem] = []
+    if bundle is not None and bundle["pipeline"] is not None:
+        try:
+            from sklearn.inspection import permutation_importance
+
+            pi = permutation_importance(
+                bundle["pipeline"],
+                bundle["X_test"],
+                bundle["y_test"],
+                n_repeats=10,
+                random_state=SEED,
+                n_jobs=-1,
+            )
+            ranked = sorted(
+                zip(bundle["X_test"].columns, pi.importances_mean, strict=False), key=lambda t: -float(t[1])
+            )[:10]
+            feature_importance = [
+                FeatureImportanceItem(feature=str(f), importance=round(float(v), 4)) for f, v in ranked
+            ]
+        except Exception:
+            feature_importance = []
     result = MLExperimentResult(
         status="ok",
         task=task,
@@ -389,6 +515,8 @@ def run_ml_experiment(
         best_metric_value=best.metrics.get(best_metric_name),
         dataset_fingerprint=dataframe_fingerprint(df),
         runtime_seconds=round(time.perf_counter() - started, 3),
+        tuning_note=tuning_note,
+        feature_importance=feature_importance,
     )
     if store is not None:
         notes = "；".join(f"{e.column}: {e.reason}" for e in excluded)[:500]
@@ -410,4 +538,23 @@ def run_ml_experiment(
             notes=notes,
             runtime_seconds=result.runtime_seconds,
         )
+        if persist_dir is not None and task != "clustering" and bundle is not None and bundle["pipeline"] is not None:
+            try:
+                import joblib
+
+                models_dir = Path(persist_dir)
+                models_dir.mkdir(parents=True, exist_ok=True)
+                joblib.dump(
+                    {
+                        "pipeline": bundle["pipeline"],
+                        "model": result.best_model,
+                        "metrics": {m.model: m.metrics for m in models},
+                        "dataset_fingerprint": result.dataset_fingerprint,
+                    },
+                    models_dir / f"{result.tracked_uid}.joblib",
+                )
+            except Exception:
+                pass  # 持久化失败不影响实验结果
     return result
+
+

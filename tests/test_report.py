@@ -135,3 +135,35 @@ def test_report_with_references_section():
     assert "…" in md  # 摘要截断
     assert "相关工作（文献引用）" in html
     assert "<a href=" in html and "2401.0001" in html
+
+
+def test_report_ml_section_contains_model_card():
+    from models.schemas import (
+        ExcludedFeature,
+        MLExperimentResult,
+        MLModelResult,
+    )
+
+    _df, profile, question, record = build_world()
+    ml_result = MLExperimentResult(
+        status="ok",
+        task="regression",
+        target="final_score",
+        features_numeric=["attendance_rate"],
+        features_categorical=[],
+        excluded=[ExcludedFeature(column="student_id", reason="标识符列")],
+        n_train=40,
+        n_test=10,
+        models=[MLModelResult(model="RandomForest", params={"cv_best": {"max_depth": 10}}, metrics={"R2": 0.8, "R2_CV": 0.75})],
+        best_model="RandomForest",
+        best_metric_name="R2",
+        best_metric_value=0.8,
+        dataset_fingerprint="0a2cb37d00000000",
+        tuning_note="小网格调优生效",
+        feature_importance=[],
+    )
+    md, html = build_report(profile, "t.csv", [question], [record], ml_result=ml_result)
+    assert "模型卡片" in md
+    assert "小网格调优生效" in md
+    assert "0a2cb37d" in md
+    assert "模型卡片" in html

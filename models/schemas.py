@@ -1,4 +1,4 @@
-"""数据画像相关的 Pydantic 模型。"""
+﻿"""数据画像相关的 Pydantic 模型。"""
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -156,6 +156,11 @@ class MLModelResult(BaseModel):
     train_seconds: float = 0.0
 
 
+class FeatureImportanceItem(BaseModel):
+    feature: str
+    importance: float
+
+
 class MLExperimentResult(BaseModel):
     status: Literal["ok", "failed"]
     reason: str = ""
@@ -175,6 +180,8 @@ class MLExperimentResult(BaseModel):
     dataset_fingerprint: str = ""
     tracked_uid: str = ""
     runtime_seconds: float = 0.0
+    tuning_note: str = ""
+    feature_importance: list[FeatureImportanceItem] = Field(default_factory=list)
 
 
 class TrackedExperiment(BaseModel):
@@ -229,3 +236,4 @@ TYPE_CN = {
     "text": "文本",
     "empty": "空列",
 }
+
