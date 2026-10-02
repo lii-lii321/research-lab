@@ -15,6 +15,7 @@ from services.ml_lab import run_ml_experiment
 from services.planner import generate_experiment_plan
 from services.profiler import profile_dataset
 from services.report import build_report
+from services.report_images import collect_profile_images
 from services.reports_store import get_report, list_reports, save_report
 from services.repro import build_repro_script
 from services.research_questions import generate_research_questions_auto
@@ -281,17 +282,20 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
     if st.button("生成研究报告", type="primary"):
         with st.spinner("正在汇总生成研究报告…"):
             questions = st.session_state.get("rqs") or []
+            images = collect_profile_images(df, report)
             markdown, html_doc = build_report(
                 report,
                 st.session_state.get("dataset_name", "dataset"),
                 questions,
                 history,
                 st.session_state.get("ml_result"),
+                images=images,
             )
             saved = save_report(
                 st.session_state.get("dataset_name", "dataset").rsplit(".", 1)[0] or "report",
                 markdown,
                 html_doc,
+                images=images,
             )
             st.session_state["report"] = {
                 "md": markdown,

@@ -58,6 +58,7 @@ class WarningItem(BaseModel):
     code: str
     message: str
     columns: list[str] = Field(default_factory=list)
+    suggestion: str = ""
 
 
 class TargetCandidate(BaseModel):

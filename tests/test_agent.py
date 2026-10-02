@@ -61,7 +61,7 @@ def test_agent_full_pipeline_rule_mode(tmp_path, monkeypatch):
     assert FAKE_PAPERS[0].title in result.report_markdown
     assert "附录：复现脚本" in result.report_markdown
     assert "stats." in result.report_markdown
-    assert result.filename_base == "students"
+    assert result.filename_base.startswith("students")  # 沉淀时可能带 _agent 后缀
     assert result.report_html.startswith("<!DOCTYPE html>")
     kinds = {r.kind for r in store.list_experiments()}
     assert kinds == {"stats", "ml"}  # 统计实验与 ML 基线都入库

@@ -154,7 +154,13 @@ def test_report_ml_section_contains_model_card():
         excluded=[ExcludedFeature(column="student_id", reason="标识符列")],
         n_train=40,
         n_test=10,
-        models=[MLModelResult(model="RandomForest", params={"cv_best": {"max_depth": 10}}, metrics={"R2": 0.8, "R2_CV": 0.75})],
+        models=[
+            MLModelResult(
+                model="RandomForest",
+                params={"cv_best": {"max_depth": 10}},
+                metrics={"R2": 0.8, "R2_CV": 0.75},
+            )
+        ],
         best_model="RandomForest",
         best_metric_name="R2",
         best_metric_value=0.8,

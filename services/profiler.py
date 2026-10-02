@@ -37,6 +37,17 @@ TOP_VALUES_N = 5
 OUTLIER_PREVIEW_N = 10
 MAX_CORR_PAIRS = 10
 
+WARNING_SUGGESTIONS = {
+    "DUPLICATE_ROWS": "先确认是否重复采集；确认后按业务键去重再分析。",
+    "HIGH_MISSING": "缺失超过 60% 建议删列；否则用中位数/模型插补，并加缺失指示列。",
+    "CONSTANT_COLUMN": "检查采集链路是否故障；建模前直接删除该列。",
+    "IDENTIFIER_COLUMN": "从特征中排除，仅用于回查记录。",
+    "SKEWED_DISTRIBUTION": "考虑对数/Box-Cox 变换，或改用秩方法（本项目计划层已自动升级）。",
+    "OUTLIERS_DETECTED": "先核实是否录入错误；真实离群可用稳健检验或分箱处理。",
+    "CLASS_IMBALANCE": "使用宏平均指标与分层抽样；严重不平衡考虑重采样或类权重。",
+    "HIGH_CORRELATION": "两列择一或做降维；回归注意共线性（可看 VIF）。",
+}
+
 _ID_NAME_HINTS = ("id", "no", "number", "code", "uuid")
 _TARGET_NUMERIC_HINTS = ("score", "price", "amount", "revenue", "target")
 _TARGET_CATEGORICAL_HINTS = ("label", "target", "is_", "has_", "churn", "default", "passed", "fail")
@@ -288,6 +299,8 @@ def _collect_warnings(
                 columns=[pair.column_a, pair.column_b],
             )
         )
+    for item in out:
+        item.suggestion = WARNING_SUGGESTIONS.get(item.code, "")
     return out
 
 

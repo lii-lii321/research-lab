@@ -12,10 +12,51 @@ plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "sans-serif"]
 plt.rcParams["axes.unicode_minus"] = False
 
 MAX_HEATMAP_COLS = 12
+MAX_HISTOGRAM_PLOTS = 6
 
 NAVY = "#1a365d"
 BLUE = "#2563eb"
 SLATE = "#334155"
+
+
+def numeric_histograms(df: pd.DataFrame, cols: list[str], max_plots: int = MAX_HISTOGRAM_PLOTS):
+    """前 N 个数值列的分布直方图网格；无可绘列返回 None。"""
+    cols = [c for c in cols if c in df.columns][:max_plots]
+    if not cols:
+        return None
+    n = len(cols)
+    ncols = 2 if n > 1 else 1
+    nrows = (n + 1) // 2
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(5.6 * ncols, 3.2 * nrows), dpi=120, squeeze=False
+    )
+    for ax, col in zip(axes.flat, cols, strict=False):
+        values = pd.to_numeric(df[col], errors="coerce").dropna()
+        ax.hist(values, bins=24, color=BLUE, alpha=0.75)
+        ax.set_title(col, fontsize=9, color=NAVY)
+    for ax in axes.flat[n:]:
+        ax.set_visible(False)
+    fig.tight_layout()
+    return fig
+
+
+def missing_matrix(df: pd.DataFrame, max_rows: int = 80):
+    """前 max_rows 行的缺失模式灰度矩阵（白=有值，黑=缺失）。"""
+    sample = df.head(max_rows)
+    if sample.empty:
+        return None
+    fig, ax = plt.subplots(figsize=(7, 3.2), dpi=120)
+    ax.imshow(sample.isna().to_numpy(), aspect="auto", cmap="Greys", vmin=0, vmax=1)
+    ax.set_xticks(
+        range(len(sample.columns)),
+        labels=[str(c) for c in sample.columns],
+        rotation=45,
+        ha="right",
+        fontsize=7,
+    )
+    ax.set_ylabel(f"行（前 {len(sample)}）", fontsize=8)
+    fig.tight_layout()
+    return fig
 
 
 def correlation_heatmap(df: pd.DataFrame, numeric_cols: list[str]):

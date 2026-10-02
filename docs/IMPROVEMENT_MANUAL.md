@@ -304,12 +304,13 @@ for attempt in range(3):
 - [x] B1 调优-持久化-解释三件套
 - [x] B2 自动模型卡片
 - [x] E2 LLM 指数退避重试
-- [ ] E1 golden 评测集（CI）+ eval_llm 脚本
-- [ ] F1 报告配图（直方图+缺失矩阵）
-- [ ] F2 八类告警处置建议
-- [ ] G1 因果提示 + A/B 识别
+- [x] E1 golden 评测集（CI）+ eval_llm 脚本
+- [x] F1 报告配图（直方图+缺失矩阵）
+- [x] F2 八类告警处置建议
+- [x] G1 因果提示 + A/B 识别
 - [ ] C1 第一篇论文复现专栏
 - [ ] H1 README.en + mermaid + demo GIF
 
 > 完成即 v1.0.0：打 tag、发 Release（附 demo GIF 与论文复现链接），简历项目描述更新为"统计闭环 + ML 纵深 + 论文复现 + 全链路可溯源"。
+
 

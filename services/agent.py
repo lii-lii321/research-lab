@@ -19,6 +19,8 @@ from services.llm import LLMClient
 from services.ml_lab import run_ml_experiment
 from services.planner import generate_experiment_plan
 from services.report import build_report
+from services.report_images import collect_profile_images
+from services.reports_store import save_report
 from services.research_questions import generate_research_questions_auto
 from services.tracking import TrackingStore
 
@@ -111,10 +113,19 @@ def run_research_agent(
 
     def do_report() -> str:
         nonlocal report_md, report_html, filename_base
+        images = collect_profile_images(df, profile)
         report_md, report_html = build_report(
-            profile, dataset_name, questions, records, ml_result, references
+            profile, dataset_name, questions, records, ml_result, references, images
         )
         filename_base = dataset_name.rsplit(".", 1)[0] or "report"
+        if store is not None:
+            try:
+                saved = save_report(
+                    f"{filename_base}_agent", report_md, report_html, images=images
+                )
+                filename_base = saved["name"]
+            except Exception:
+                pass  # 沉淀失败不影响 Agent 结果返回
         return f"报告生成（Markdown {len(report_md)} 字符 / HTML {len(report_html)} 字符）"
 
     step("数据画像", lambda: f"{profile.dataset.n_rows} 行 × {profile.dataset.n_cols} 列，"

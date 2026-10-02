@@ -1,0 +1,22 @@
+{
+  "cases": [
+    {"id": "num_num_pearson", "columns": {"x1": "numeric", "x2": "numeric"}, "variables": ["x1", "x2"], "expected_method": "pearson"},
+    {"id": "num_num_skewed_spearman", "columns": {"effort": "skewed", "score": "numeric"}, "variables": ["effort", "score"], "expected_method": "spearman"},
+    {"id": "cat2_num_welch", "columns": {"group": "categorical2", "score": "numeric"}, "variables": ["group", "score"], "expected_method": "welch_ttest"},
+    {"id": "cat3_num_anova", "columns": {"school": "categorical3", "score": "numeric"}, "variables": ["school", "score"], "expected_method": "anova"},
+    {"id": "cat2_num_skewed_mannwhitney", "columns": {"group": "categorical2", "income": "skewed"}, "variables": ["group", "income"], "expected_method": "mannwhitney"},
+    {"id": "cat3_num_skewed_kruskal", "columns": {"school": "categorical3", "income": "skewed"}, "variables": ["school", "income"], "expected_method": "kruskal"},
+    {"id": "cat_cat_chi2", "columns": {"gender": "categorical2", "school": "categorical3"}, "variables": ["gender", "school"], "expected_method": "chi2"},
+    {"id": "num_num_skewed_reverse_spearman", "columns": {"a": "skewed", "b": "skewed"}, "variables": ["a", "b"], "expected_method": "spearman"},
+    {"id": "boolean_num_welch", "columns": {"flag": "boolean", "score": "numeric"}, "variables": ["flag", "score"], "expected_method": "welch_ttest"},
+    {"id": "boolean_num_skewed_mannwhitney", "columns": {"flag": "boolean", "income": "skewed"}, "variables": ["flag", "income"], "expected_method": "mannwhitney"},
+    {"id": "num_cat_mixed_linear", "columns": {"x1": "numeric", "g": "categorical2", "y": "numeric"}, "variables": ["x1", "g", "y"], "expected_method": "linear_regression"},
+    {"id": "cat3_num_alpha_anova", "columns": {"treatment": "categorical3", "score": "numeric"}, "variables": ["treatment", "score"], "expected_method": "anova"},
+    {"id": "num_pair_pearson_seed2", "columns": {"height": "numeric", "weight": "numeric"}, "variables": ["height", "weight"], "expected_method": "pearson", "seed": 2},
+    {"id": "skewed_pair_seed3_spearman", "columns": {"a": "skewed", "b": "numeric"}, "variables": ["a", "b"], "expected_method": "spearman", "seed": 3},
+    {"id": "cat2_num_seed4_welch", "columns": {"g": "categorical2", "v": "numeric"}, "variables": ["g", "v"], "expected_method": "welch_ttest", "seed": 4},
+    {"id": "cat_cat_seed5_chi2", "columns": {"p": "categorical2", "q": "categorical3"}, "variables": ["p", "q"], "expected_method": "chi2", "seed": 5},
+    {"id": "cat3_skewed_seed6_kruskal", "columns": {"grp": "categorical3", "inc": "skewed"}, "variables": ["grp", "inc"], "expected_method": "kruskal", "seed": 6},
+    {"id": "bool_skewed_seed7_mannwhitney", "columns": {"hit": "boolean", "inc": "skewed"}, "variables": ["hit", "inc"], "expected_method": "mannwhitney", "seed": 7}
+  ]
+}

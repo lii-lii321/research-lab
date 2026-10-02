@@ -1,6 +1,7 @@
 """研究报告构建：Markdown + HTML，全部内容来自已执行的真实结果。"""
 from __future__ import annotations
 
+import base64
 import html as html_lib
 from datetime import datetime
 
@@ -14,13 +15,14 @@ from models.schemas import (
 )
 from services.executor import METHOD_CN, format_p
 from services.literature import snippet
+from services.reports_store import sanitize_name
 from services.repro import build_repro_script
 
-GENERATOR = "AI Data Research Lab v0.5.1"
+GENERATOR = "AI Data Research Lab v1.0.0"
 
 LEVEL_ICON = {"critical": "🔴", "warning": "🟡", "info": "🔵"}
 
-CN_NUM = ("一", "二", "三", "四", "五", "六", "七")
+CN_NUM = ("一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二")
 
 TASK_CN = {"regression": "回归", "classification": "分类", "clustering": "聚类"}
 
@@ -133,7 +135,9 @@ def build_markdown(
     generated: str,
     ml_result: MLExperimentResult | None = None,
     references: list[PaperRef] | None = None,
+    images: list[tuple[str, bytes]] | None = None,
 ) -> str:
+    stem = sanitize_name(dataset_name.rsplit(".", 1)[0])
     section = {"n": 0}
 
     def heading(title: str) -> str:
@@ -160,7 +164,11 @@ def build_markdown(
     lines.append(f"- 字段类型：{type_desc or '—'}")
     lines += ["", "### 质量提示", ""]
     if profile.warnings:
-        lines += [f"- {LEVEL_ICON[w.level]} `{w.code}` {_md(w.message)}" for w in profile.warnings]
+        lines += [
+            f"- {LEVEL_ICON[w.level]} `{w.code}` {_md(w.message)}"
+            + (f"　→ 建议：{_md(w.suggestion)}" if w.suggestion else "")
+            for w in profile.warnings
+        ]
     else:
         lines.append("- 未发现明显的质量问题。")
     lines += [
@@ -175,6 +183,10 @@ def build_markdown(
             f"| {_md(c.name)} | {TYPE_CN.get(c.type, c.type)} | {c.missing_rate:.1%} "
             f"| {c.n_unique} | {_md(_summary_field(c))} |"
         )
+    if images:
+        lines += ["", "### 画像配图", ""]
+        for name, _png in images:
+            lines += [f"![{name}](assets/{stem}/{name}.png)", ""]
     if profile.target_candidates:
         lines += ["", "### 目标变量候选", ""]
         lines += [f"- **{t.column}** — {_md(t.reason)}" for t in profile.target_candidates]
@@ -202,6 +214,21 @@ def build_markdown(
             lines.append("")
     else:
         lines.append("-（本次会话未执行实验）")
+    sig_records = [r for r in records if r.result.status == "ok" and r.result.decision == "reject_h0"]
+    if sig_records:
+        lines += ["", heading("因果提示"), ""]
+        for rec in sig_records:
+            confounds = [
+                p.column_b if p.column_a in rec.plan.variables else p.column_a
+                for p in profile.correlations
+                if rec.plan.variables
+                and (p.column_a in rec.plan.variables) != (p.column_b in rec.plan.variables)
+            ][:2]
+            confound_txt = "、".join(confounds) if confounds else "共同原因与选择偏差"
+            lines.append(
+                f"- 「{_md(' → '.join(rec.plan.variables))}」显著不等于因果：需排除 {_md(confound_txt)} 等混杂，"
+                "并进行随机化实验或匹配设计。"
+            )
     if ml_result is not None:
         lines += ["", heading("ML 基线实验"), ""]
         if ml_result.status != "ok":
@@ -315,6 +342,7 @@ def build_html(
     generated: str,
     ml_result: MLExperimentResult | None = None,
     references: list[PaperRef] | None = None,
+    images: list[tuple[str, bytes]] | None = None,
 ) -> str:
     section = {"n": 0}
 
@@ -356,7 +384,8 @@ def build_html(
     if profile.warnings:
         for w in profile.warnings:
             icon = LEVEL_ICON.get(w.level, "")
-            parts.append(f"<li>{icon} <code>{_esc(w.code)}</code> {_esc(w.message)}</li>")
+            advice = f"　→ 建议：{_esc(w.suggestion)}" if w.suggestion else ""
+            parts.append(f"<li>{icon} <code>{_esc(w.code)}</code> {_esc(w.message)}{advice}</li>")
     else:
         parts.append("<li>未发现明显的质量问题。</li>")
     parts.append("</ul>")
@@ -369,6 +398,13 @@ def build_html(
             f"<td>{c.missing_rate:.1%}</td><td>{c.n_unique}</td><td>{_esc(_summary_field(c))}</td></tr>"
         )
     parts.append("</table>")
+    if images:
+        parts.append("<h3>画像配图</h3>")
+        for name, png in images:
+            b64 = base64.b64encode(png).decode("ascii")
+            parts.append(
+                f'<img src="data:image/png;base64,{b64}" alt="{_esc(name)}" style="max-width:100%;">'
+            )
     if profile.target_candidates:
         parts.append("<h3>目标变量候选</h3><ul>")
         parts += [
@@ -428,6 +464,22 @@ def build_html(
             )
     else:
         parts.append("<ul><li>（本次会话未执行实验）</li></ul>")
+    sig_records = [r for r in records if r.result.status == "ok" and r.result.decision == "reject_h0"]
+    if sig_records:
+        parts.append(heading("因果提示") + "<ul>")
+        for rec in sig_records:
+            confounds = [
+                p.column_b if p.column_a in rec.plan.variables else p.column_a
+                for p in profile.correlations
+                if rec.plan.variables
+                and (p.column_a in rec.plan.variables) != (p.column_b in rec.plan.variables)
+            ][:2]
+            confound_txt = "、".join(confounds) if confounds else "共同原因与选择偏差"
+            parts.append(
+                f"<li>「{_esc(' → '.join(rec.plan.variables))}」显著不等于因果：需排除 {_esc(confound_txt)} 等混杂，"
+                "并进行随机化实验或匹配设计。</li>"
+            )
+        parts.append("</ul>")
     if ml_result is not None:
         parts.append(heading("ML 基线实验"))
         if ml_result.status != "ok":
@@ -535,9 +587,14 @@ def build_report(
     records: list[ExperimentRecord],
     ml_result: MLExperimentResult | None = None,
     references: list[PaperRef] | None = None,
+    images: list[tuple[str, bytes]] | None = None,
 ) -> tuple[str, str]:
     generated = datetime.now().strftime("%Y-%m-%d %H:%M")
     return (
-        build_markdown(profile, dataset_name, questions, records, generated, ml_result, references),
-        build_html(profile, dataset_name, questions, records, generated, ml_result, references),
+        build_markdown(
+            profile, dataset_name, questions, records, generated, ml_result, references, images
+        ),
+        build_html(
+            profile, dataset_name, questions, records, generated, ml_result, references, images
+        ),
     )

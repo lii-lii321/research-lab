@@ -29,8 +29,17 @@ def sanitize_name(name: str) -> str:
     return cleaned[:80]
 
 
-def save_report(name_base: str, markdown: str, html: str, base: Path | str | None = None) -> dict:
-    """保存一份报告（同名自动加时间戳后缀），返回 {name, md_path, html_path}。"""
+def save_report(
+    name_base: str,
+    markdown: str,
+    html: str,
+    base: Path | str | None = None,
+    images: list[tuple[str, bytes]] | None = None,
+) -> dict:
+    """保存一份报告（同名自动加时间戳后缀），返回 {name, md_path, html_path}。
+
+    images 为 (文件名, PNG 字节) 列表，落盘到 assets/<报告名>/ 供 MD 相对引用。
+    """
     directory = _dir(base)
     stem = sanitize_name(name_base)
     md_path = directory / f"{stem}.md"
@@ -41,6 +50,11 @@ def save_report(name_base: str, markdown: str, html: str, base: Path | str | Non
         html_path = directory / f"{stem}.html"
     md_path.write_text(markdown, encoding="utf-8")
     html_path.write_text(html, encoding="utf-8")
+    if images:
+        assets = directory / "assets" / stem
+        assets.mkdir(parents=True, exist_ok=True)
+        for fname, data in images:
+            (assets / f"{fname}.png").write_bytes(data)
     return {"name": stem, "md_path": str(md_path), "html_path": str(html_path)}
 
 

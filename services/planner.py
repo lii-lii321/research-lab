@@ -64,6 +64,8 @@ def suggest_method(report: ProfileReport, variables: list[str]) -> str:
             skewed = any(_abs_skew(c) >= SKEW_ALERT_FOR_RANK for c in numeric)
             return "spearman" if skewed else "pearson"
         return "linear_regression"
+    if len(numeric) >= 2 and categorical:
+        return "linear_regression"
     if len(numeric) == 1 and categorical:
         k = max(c.n_unique for c in categorical)
         if k == 2:
