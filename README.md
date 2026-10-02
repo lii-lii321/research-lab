@@ -79,6 +79,7 @@ copy .env.example .env    # 填入 AI_API_KEY（SiliconFlow / 智谱 / DeepSeek 
 ## 设计决策与路线
 
 - 为什么不做"LLM 生成代码 + 沙箱"？见 [ADR-0001](docs/adr-0001-method-whitelist-over-codegen-sandbox.md)
+- 系统提升方案与逐条落实手册（A–H 八主题、文件级改动清单、机器可判定验收标准）见 [docs/IMPROVEMENT_MANUAL.md](docs/IMPROVEMENT_MANUAL.md)
 - 三阶段路线与反范围承诺见 [PROJECT_BRIEF.md](PROJECT_BRIEF.md)，版本历史见 [CHANGELOG.md](CHANGELOG.md)
 - Phase 1 统计流水线（已完成）→ Phase 2 ML + 实验追踪（已完成）→ Phase 3 Research Agent（主体完成，LLM 自主决策模式待 Key）
 
