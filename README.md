@@ -1,8 +1,25 @@
-# AI Data Research Lab
+﻿# AI Data Research Lab
 
 [![CI](https://github.com/lii-lii321/research-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/lii-lii321/research-lab/actions/workflows/ci.yml)
 
+**中文 | [English](README.en.md)**
+
 从一份 CSV 到一份**可复现的研究报告**：数据画像 → 研究问题 → 实验计划 → 统计检验 → ML 基线 → 文献检索 → 报告导出，全自动串联。
+
+**架构总览：**
+
+```mermaid
+flowchart LR
+  CSV[CSV/Excel] --> Prof[Dataset Profiler]
+  Prof --> RQ[研究问题]
+  RQ --> Plan[实验计划]
+  Plan --> Exe[scipy 受控执行]
+  Exe --> Rep[报告 MD/HTML]
+  Prof --> ML[ML 基线 + CV]
+  ML --> Track[(实验追踪)]
+  Exe --> Track
+  Lit[arXiv 文献] --> Rep
+```
 
 ## 为谁设计
 
@@ -80,11 +97,13 @@ copy .env.example .env    # 填入 AI_API_KEY（SiliconFlow / 智谱 / DeepSeek 
 
 - 为什么不做"LLM 生成代码 + 沙箱"？见 [ADR-0001](docs/adr-0001-method-whitelist-over-codegen-sandbox.md)
 - 系统提升方案与逐条落实手册（A–H 八主题、文件级改动清单、机器可判定验收标准）见 [docs/IMPROVEMENT_MANUAL.md](docs/IMPROVEMENT_MANUAL.md)
+- 论文复现专栏：[reproductions/](reproductions/)（第一篇：Student 1908 配对 t 检验）
 - 三阶段路线与反范围承诺见 [PROJECT_BRIEF.md](PROJECT_BRIEF.md)，版本历史见 [CHANGELOG.md](CHANGELOG.md)
-- Phase 1 统计流水线（已完成）→ Phase 2 ML + 实验追踪（已完成）→ Phase 3 Research Agent（主体完成，LLM 自主决策模式待 Key）
 
 ## 测试与质量
 
-pytest 全量用例（含 Streamlit AppTest 界面级冒烟）进 CI，每次推送运行；
+pytest 176 用例（含 Streamlit AppTest 界面级冒烟）进 CI，每次推送运行；
 覆盖率、ruff、mypy 由 CI 门禁强制（覆盖率阈值 85%）。
 `scripts/smoke_check.py` 对真实启动的 API 与 UI 做九项端到端探活（含真实 arXiv 检索）。
+
+

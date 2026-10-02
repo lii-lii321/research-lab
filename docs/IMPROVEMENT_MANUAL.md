@@ -308,9 +308,11 @@ for attempt in range(3):
 - [x] F1 报告配图（直方图+缺失矩阵）
 - [x] F2 八类告警处置建议
 - [x] G1 因果提示 + A/B 识别
-- [ ] C1 第一篇论文复现专栏
-- [ ] H1 README.en + mermaid + demo GIF
+- [x] C1 第一篇论文复现专栏（Student 1908，t=4.0621 vs 4.06 ✅）
+- [x] H1 README.en + mermaid 架构图（demo GIF 待 VHS 录制）
 
 > 完成即 v1.0.0：打 tag、发 Release（附 demo GIF 与论文复现链接），简历项目描述更新为"统计闭环 + ML 纵深 + 论文复现 + 全链路可溯源"。
+
+
 
 
