@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from pathlib import Path
 
 import pytest
@@ -37,7 +36,6 @@ def test_app_ml_experiment_flow(tmp_path, monkeypatch):
 
 
 def test_app_agent_flow(tmp_path, monkeypatch):
-    from services.tracking import TrackingStore
 
     monkeypatch.setenv("RESEARCH_LAB_DB", str(tmp_path / "app_agent.db"))
     at = make_app()

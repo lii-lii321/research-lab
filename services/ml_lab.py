@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """ML 基线实验：特征守门、自动任务推断、多模型真实训练与指标对比。"""
 from __future__ import annotations
 
@@ -23,18 +22,18 @@ from sklearn.metrics import (
     roc_auc_score,
     silhouette_score,
 )
-from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
+from sklearn.model_selection import KFold, StratifiedKFold, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 
 try:
     from xgboost import XGBClassifier, XGBRegressor
 except ImportError:
-    XGBClassifier = XGBRegressor = None
+    XGBClassifier = XGBRegressor = None  # type: ignore[misc,assignment]
 try:
     from lightgbm import LGBMClassifier, LGBMRegressor
 except ImportError:
-    LGBMClassifier = LGBMRegressor = None
+    LGBMClassifier = LGBMRegressor = None  # type: ignore[misc,assignment]
 
 from models.schemas import ExcludedFeature, MLExperimentResult, MLModelResult
 from services.tracking import TrackingStore, dataframe_fingerprint

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """生成示例数据集 data/samples/student_performance.csv。"""
 import sys
 from pathlib import Path

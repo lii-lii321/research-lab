@@ -1,4 +1,15 @@
-# Changelog
+﻿# Changelog
+
+## 0.8.0 - 2026-10-02
+
+落实手册 v0.8.0 批次（D1/D2/D3/A1）：
+
+- 工程门禁：CI 新增 ruff、mypy（29 文件零错误）、pytest-cov 覆盖率门禁 85%（实测 94%）
+- 依赖锁定：requirements.in + pip-compile 生成锁定版 requirements.txt
+- 统计闭环（statsmodels）：相关系数 Fisher z 95% CI；Welch/t 均值差 95% CI；线性回归 OLS 诊断（调整 R²、F、斜率 CI、Shapiro、Breusch-Pagan）；实验计划自动附功效分析（所需样本量），报告展示 95% CI 与所需样本量
+- 测试 145 → 152 全绿；README 用例数漂移修正
+
+## 0.7.0 - 2026-09-30
 
 ## 0.7.1 - 2026-10-01
 
@@ -72,3 +83,4 @@
 
 - 项目启动：Dataset Profiler（类型推断 / 缺失重复 / 离群 / 高相关 / 类别不平衡 / 目标候选）
 - FastAPI + Streamlit 双入口，pytest 测试与冒烟脚本
+

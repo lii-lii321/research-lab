@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 """数据画像相关的 Pydantic 模型。"""
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -18,15 +17,15 @@ class TopValue(BaseModel):
 
 class NumericStats(BaseModel):
     count: int
-    mean: Optional[float] = None
-    std: Optional[float] = None
-    min: Optional[float] = None
-    q1: Optional[float] = None
-    median: Optional[float] = None
-    q3: Optional[float] = None
-    max: Optional[float] = None
-    skewness: Optional[float] = None
-    kurtosis: Optional[float] = None
+    mean: float | None = None
+    std: float | None = None
+    min: float | None = None
+    q1: float | None = None
+    median: float | None = None
+    q3: float | None = None
+    max: float | None = None
+    skewness: float | None = None
+    kurtosis: float | None = None
 
 
 class ColumnProfile(BaseModel):
@@ -36,9 +35,9 @@ class ColumnProfile(BaseModel):
     missing_rate: float
     n_unique: int
     unique_ratio: float
-    numeric: Optional[NumericStats] = None
-    top_values: Optional[list[TopValue]] = None
-    outlier_count: Optional[int] = None
+    numeric: NumericStats | None = None
+    top_values: list[TopValue] | None = None
+    outlier_count: int | None = None
     outlier_values: list[float] = Field(default_factory=list)
     description: str = ""
 
@@ -100,14 +99,15 @@ class ExperimentPlan(BaseModel):
     variables: list[str] = Field(default_factory=list)
     notes: str = ""
     source: Literal["llm", "rule"] = "rule"
+    required_n: int | None = None
 
 
 class GroupStat(BaseModel):
     group: str
     n: int
-    mean: Optional[float] = None
-    std: Optional[float] = None
-    median: Optional[float] = None
+    mean: float | None = None
+    std: float | None = None
+    median: float | None = None
 
 
 class ExperimentResult(BaseModel):
@@ -119,16 +119,16 @@ class ExperimentResult(BaseModel):
     alpha: float = 0.05
     n_used: int = 0
     n_dropped: int = 0
-    statistic: Optional[float] = None
+    statistic: float | None = None
     statistic_name: str = ""
-    p_value: Optional[float] = None
-    p_value_raw: Optional[float] = None
-    effect_size: Optional[float] = None
+    p_value: float | None = None
+    p_value_raw: float | None = None
+    effect_size: float | None = None
     effect_name: str = ""
     decision: Literal["reject_h0", "fail_to_reject_h0", "none"] = "none"
     groups: list[GroupStat] = Field(default_factory=list)
-    contingency: Optional[list[list[int]]] = None
-    extra: dict[str, float] = Field(default_factory=dict)
+    contingency: list[list[int]] | None = None
+    extra: dict[str, Any] = Field(default_factory=dict)
     interpretation: str = ""
     interpretation_source: Literal["llm", "rule", "none"] = "none"
 
@@ -159,19 +159,19 @@ class MLModelResult(BaseModel):
 class MLExperimentResult(BaseModel):
     status: Literal["ok", "failed"]
     reason: str = ""
-    task: Literal["regression", "classification", "clustering"]
-    target: Optional[str] = None
+    task: str
+    target: str | None = None
     features_numeric: list[str] = Field(default_factory=list)
     features_categorical: list[str] = Field(default_factory=list)
     excluded: list[ExcludedFeature] = Field(default_factory=list)
     n_train: int = 0
     n_test: int = 0
-    n_clusters: Optional[int] = None
+    n_clusters: int | None = None
     cluster_sizes: dict[str, int] = Field(default_factory=dict)
     models: list[MLModelResult] = Field(default_factory=list)
-    best_model: Optional[str] = None
+    best_model: str | None = None
     best_metric_name: str = ""
-    best_metric_value: Optional[float] = None
+    best_metric_value: float | None = None
     dataset_fingerprint: str = ""
     tracked_uid: str = ""
     runtime_seconds: float = 0.0
@@ -182,12 +182,12 @@ class TrackedExperiment(BaseModel):
     created_at: str
     kind: str
     task: str
-    target: Optional[str] = None
+    target: str | None = None
     dataset_name: str
     n_rows: int
-    best_model: Optional[str] = None
-    best_metric_name: Optional[str] = None
-    best_metric_value: Optional[float] = None
+    best_model: str | None = None
+    best_metric_name: str | None = None
+    best_metric_value: float | None = None
 
 
 class AgentStep(BaseModel):
@@ -212,7 +212,7 @@ class AgentRunResult(BaseModel):
     steps: list[AgentStep] = Field(default_factory=list)
     questions: list[ResearchQuestion] = Field(default_factory=list)
     records: list[ExperimentRecord] = Field(default_factory=list)
-    ml_result: Optional[MLExperimentResult] = None
+    ml_result: MLExperimentResult | None = None
     references: list[PaperRef] = Field(default_factory=list)
     report_markdown: str = ""
     report_html: str = ""

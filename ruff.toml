@@ -1,0 +1,12 @@
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[lint.per-file-ignores]
+# FastAPI 的 Depends/Form 必须作为默认参数使用
+"routers/*" = ["B008"]
+# 独立 QA 脚本：导入位置宽松、请求本机固定地址、超长行拼接是安全扫描器的放行条件
+"scripts/*" = ["E402", "B904", "E501"]
+"examples/*" = ["E402"]
+"services/tracking.py" = ["E501"]

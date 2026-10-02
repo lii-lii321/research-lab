@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """表格文件读取：格式与编码自动回退。"""
 from __future__ import annotations
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """从 LLM 输出中稳健提取 JSON（容忍代码围栏与前后缀文本）。"""
 from __future__ import annotations
 

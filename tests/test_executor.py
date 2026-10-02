@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 import numpy as np
 import pandas as pd
 import pytest
 
 from models.schemas import ExperimentPlan
-from services.executor import rule_interpretation, run_experiment
+from services.executor import run_experiment
 from services.llm import LLMError
 
 
@@ -18,9 +17,43 @@ class BrokenLLM:
         raise LLMError("连接失败")
 
 
+def test_pearson_ci_brackets_r():
+    rng = np.random.default_rng(12)
+    df = pd.DataFrame({"x": np.arange(50.0), "y": np.arange(50.0) * 1.2 + rng.normal(0, 3, 50)})
+    result = run_experiment(make_plan("pearson", ["x", "y"]), df)
+    ci = result.extra["ci95"]
+    assert ci[0] <= result.statistic <= ci[1]
+
+
+def test_welch_mean_diff_ci_excludes_zero():
+    rng = np.random.default_rng(13)
+    df = pd.DataFrame(
+        {
+            "g": ["A"] * 50 + ["B"] * 50,
+            "v": np.concatenate([rng.normal(50, 5, 50), rng.normal(58, 5, 50)]),
+        }
+    )
+    result = run_experiment(make_plan("welch_ttest", ["g", "v"]), df)
+    ci = result.extra["mean_diff_ci95"]
+    assert ci[1] < 0  # meanA - meanB ≈ -8：CI 整体为负且不跨零
+
+
+def test_regression_diagnostics():
+    rng = np.random.default_rng(14)
+    x = np.arange(40.0)
+    df = pd.DataFrame({"x": x, "y": 3 * x + 5 + rng.normal(0, 2, 40)})
+    result = run_experiment(make_plan("linear_regression", ["x", "y"]), df)
+    assert result.extra["adj_r2"] > 0.9
+    assert result.extra["f_pvalue"] is not None and result.extra["f_pvalue"] < 1e-6
+    assert result.extra["resid_shapiro_p"] is not None
+    assert result.extra["bp_p"] is not None
+    lo, hi = result.extra["slope_ci95"]
+    assert lo < 3 < hi  # 真实斜率 3 落在置信区间内
+
+
 def make_plan(method: str, variables: list[str], alpha: float = 0.05) -> ExperimentPlan:
     return ExperimentPlan(
-        experiment_id=f"EXP-RQ1",
+        experiment_id="EXP-RQ1",
         question_id="RQ1",
         hypothesis="h",
         method=method,

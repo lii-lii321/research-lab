@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """轮询等待一个本地 URL 就绪（供 smoke 与 CI 使用；仅允许本机回环地址）。
 
 用法：python scripts/wait_for.py http://127.0.0.1:8011/health [timeout_seconds]

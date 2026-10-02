@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """LLM 研究问题生成：数据画像 → 可检验的研究问题（RQ）列表。"""
 from __future__ import annotations
 
@@ -163,12 +162,12 @@ def generate_research_questions_rule(
                     "组间比较",
                 )
     if not questions:
-        numerics = [c.name for c in report.columns if c.type == "numeric"][:2]
-        if len(numerics) == 2:
+        pair = [c.name for c in report.columns if c.type == "numeric"][:2]
+        if len(pair) == 2:
             add(
-                f"{numerics[0]} 与 {numerics[1]} 是否存在显著相关关系？",
+                f"{pair[0]} 与 {pair[1]} 是否存在显著相关关系？",
                 "未识别到目标变量，退而检验前两个数值列的相关性",
-                numerics,
+                pair,
                 "相关分析",
             )
     matched = _matched_columns(report, task)

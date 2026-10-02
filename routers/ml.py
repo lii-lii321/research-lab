@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
-from typing import Annotated, Optional
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
 from models.schemas import MLExperimentResult, TrackedExperiment
@@ -19,7 +18,7 @@ async def ml_experiment(
     target: str = Form(""),
     task: str = Form("auto"),
     dataset_name: str = Form(""),
-    store: Annotated[Optional[TrackingStore], Depends(get_tracking_store)] = None,
+    store: Annotated[TrackingStore | None, Depends(get_tracking_store)] = None,
 ) -> MLExperimentResult:
     if task not in TASKS:
         raise HTTPException(status_code=422, detail=f"未知任务类型：{task}（可选 {' / '.join(TASKS)}）")
@@ -34,7 +33,7 @@ async def ml_experiment(
 @router.get("/experiments", response_model=list[TrackedExperiment])
 def experiments(
     limit: int = 20,
-    store: Annotated[Optional[TrackingStore], Depends(get_tracking_store)] = None,
+    store: Annotated[TrackingStore | None, Depends(get_tracking_store)] = None,
 ) -> list[TrackedExperiment]:
     return (store or TrackingStore()).list_experiments(limit=min(max(limit, 1), 100))
 
@@ -42,7 +41,7 @@ def experiments(
 @router.get("/experiments/{uid}")
 def experiment_detail(
     uid: str,
-    store: Annotated[Optional[TrackingStore], Depends(get_tracking_store)] = None,
+    store: Annotated[TrackingStore | None, Depends(get_tracking_store)] = None,
 ) -> dict:
     detail = (store or TrackingStore()).get_experiment(uid)
     if detail is None:

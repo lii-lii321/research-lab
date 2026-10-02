@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """上传文件 → DataFrame + ProfileReport 的共享加载逻辑。"""
 from __future__ import annotations
 

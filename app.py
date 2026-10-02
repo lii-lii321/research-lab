@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """AI Data Research Lab — Streamlit 前端（分析流程 / ML 实验室 / 实验追踪）。"""
 from __future__ import annotations
 
@@ -8,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from models.schemas import ExperimentPlan, ExperimentRecord, MLExperimentResult, ProfileReport, TYPE_CN
+from models.schemas import TYPE_CN, ExperimentPlan, ExperimentRecord, MLExperimentResult, ProfileReport
 from services.agent import run_research_agent
 from services.executor import run_experiment
 from services.llm import LLMError, get_llm_client
@@ -16,8 +15,8 @@ from services.ml_lab import run_ml_experiment
 from services.planner import generate_experiment_plan
 from services.profiler import profile_dataset
 from services.report import build_report
-from services.repro import build_repro_script
 from services.reports_store import get_report, list_reports, save_report
+from services.repro import build_repro_script
 from services.research_questions import generate_research_questions_auto
 from services.tracking import TrackingStore
 from utils.charts import correlation_heatmap, result_figure
@@ -176,7 +175,9 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
         choice = st.radio("选择研究问题", labels, label_visibility="collapsed")
         rq = rqs[labels.index(choice)]
         source_cn = "LLM 提出" if rq.source == "llm" else "规则生成"
-        st.caption(f"{rq.rationale}　｜　变量：{'、'.join(rq.variables)}　｜　建议：{rq.suggested_method}　｜　{source_cn}")
+        st.caption(
+            f"{rq.rationale}　｜　变量：{'、'.join(rq.variables)}　｜　建议：{rq.suggested_method}　｜　{source_cn}"
+        )
 
         st.divider()
         st.subheader("第三步 · 实验计划")
@@ -526,7 +527,8 @@ def render_agent(df: pd.DataFrame, report: ProfileReport) -> None:
     else:
         ml_desc = "—"
         if result.ml_result and result.ml_result.status == "ok":
-            ml_desc = f"{result.ml_result.best_model}（{result.ml_result.best_metric_name} = {result.ml_result.best_metric_value}）"
+            best = result.ml_result
+            ml_desc = f"{best.best_model}（{best.best_metric_name} = {best.best_metric_value}）"
         st.success(
             f"完成：{len(result.questions)} 个研究问题 · {len(result.records)} 个统计实验 · "
             f"ML 最佳 {ml_desc} · 总耗时 {result.runtime_seconds} 秒"

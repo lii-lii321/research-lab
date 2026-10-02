@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
 """报告库：保存 / 列表 / 取回 / 名称净化 / 同名冲突。"""
-from services.reports_store import get_report, list_reports, save_report, sanitize_name
+from services.reports_store import get_report, list_reports, sanitize_name, save_report
 
 
 def test_save_list_get_roundtrip(tmp_path):

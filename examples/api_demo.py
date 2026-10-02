@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """在 Python / Notebook 里直接使用 research-lab 的服务层。
 
 在仓库根目录运行：python examples/api_demo.py
 （需要先执行 scripts/generate_sample.py 生成示例数据）
 """
-from pathlib import Path
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -14,9 +13,9 @@ if str(ROOT) not in sys.path:
 from services.executor import run_experiment
 from services.planner import generate_experiment_plan
 from services.profiler import profile_dataset
+from services.report import build_report
 from services.reports_store import save_report
 from services.research_questions import generate_research_questions_auto
-from services.report import build_report
 from utils.io import read_tabular
 
 csv_path = ROOT / "data" / "samples" / "student_performance.csv"

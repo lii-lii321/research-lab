@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """命令行入口：把 research-lab 接进终端与脚本管道。
 
 用法（在仓库根目录）：
@@ -79,7 +78,10 @@ def cmd_experiments(args: argparse.Namespace) -> int:
         return 0
     for r in rows:
         metric = f"{r.best_metric_name}={r.best_metric_value}" if r.best_metric_name else "-"
-        print(f"{r.created_at}  [{r.kind}/{r.task}] {r.dataset_name}（{r.n_rows} 行）最佳 {r.best_model} {metric} uid={r.uid}")
+        print(
+            f"{r.created_at}  [{r.kind}/{r.task}] {r.dataset_name}（{r.n_rows} 行）"
+            f"最佳 {r.best_model} {metric} uid={r.uid}"
+        )
     return 0
 
 
@@ -123,7 +125,13 @@ def main(argv: list[str] | None = None) -> int:
     p_reports.add_argument("name", nargs="?", default="", help="报告名（省略则列出全部）")
 
     args = parser.parse_args(argv)
-    return {"profile": cmd_profile, "analyze": cmd_analyze, "experiments": cmd_experiments, "reports": cmd_reports}[args.command](args)
+    handlers = {
+        "profile": cmd_profile,
+        "analyze": cmd_analyze,
+        "experiments": cmd_experiments,
+        "reports": cmd_reports,
+    }
+    return handlers[args.command](args)
 
 
 if __name__ == "__main__":

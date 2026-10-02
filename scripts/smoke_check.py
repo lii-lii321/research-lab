@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """冒烟验证：真实启动 uvicorn 与 streamlit，请求探活后清理进程。
 
 跨平台：用当前解释器（可用 RESEARCH_LAB_PYTHON 覆盖）与轮询就绪探测，

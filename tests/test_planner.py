@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import json
 
 import numpy as np
@@ -28,6 +27,22 @@ class FakeLLM:
 class BrokenLLM:
     def chat(self, system: str, user: str, temperature: float = 0.2) -> str:
         raise LLMError("连接失败")
+
+
+def test_plan_attaches_required_n():
+    df = build_df()
+    report = profile_dataset(df)
+    rq = ResearchQuestion(id="RQ1", question="q", variables=["attendance_rate", "final_score"])
+    plan = generate_experiment_plan(rq, report, None)
+    assert plan.required_n is not None and plan.required_n >= 16
+    assert "功效分析" in plan.notes
+
+
+def test_power_unsupported_method_returns_none():
+    from services.power import required_n
+
+    assert required_n("chi2") is None
+    assert required_n("welch_ttest") >= 16
 
 
 def build_df() -> pd.DataFrame:

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """由实验计划生成可独立运行的 scipy 复现脚本。
 
 落实立项书承诺"每个分析结果可溯源到真实执行的代码"：
@@ -39,8 +38,10 @@ def build_repro_script(plan: ExperimentPlan) -> str:
     elif plan.method == "linear_regression":
         body = (
             f"sub = df[[{x!r}, {y!r}]].apply(pd.to_numeric, errors=\"coerce\").dropna()\n"
-            f"res = stats.linregress(sub[{x!r}], sub[{y!r}])\n"
-            'print(f"slope={res.slope:.6f} intercept={res.intercept:.6f}")\n'
+            "import statsmodels.api as sm\n"
+            f"X = sm.add_constant(sub[{x!r}])\n"
+            f"ols = sm.OLS(sub[{y!r}], X).fit()\n"
+            "print(ols.summary())\n"
         )
     elif plan.method in ("independent_ttest", "welch_ttest", "mannwhitney"):
         if plan.method == "mannwhitney":
@@ -70,6 +71,6 @@ def build_repro_script(plan: ExperimentPlan) -> str:
             f"sub = df[[{x!r}, {y!r}]].apply(pd.to_numeric, errors=\"coerce\").dropna()\n"
             f"raise SystemExit(f\"方法 {plan.method!r} 暂无自动复现代码\")\n"
         )
-    tail = f'print(f"statistic={{res.statistic:.6f}} p={{res.pvalue:.6g}}")\n'
+    tail = 'print(f"statistic={res.statistic:.6f} p={res.pvalue:.6g}")\n'
     tail += f'print("拒绝 H0" if res.pvalue < {alpha} else "未能拒绝 H0")\n'
     return header + body + tail

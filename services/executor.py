@@ -1,5 +1,4 @@
-﻿# -*- coding: utf-8 -*-
-"""受控统计执行：真实运行 scipy，所有数字来自计算而非生成。"""
+﻿"""受控统计执行：真实运行 scipy，所有数字来自计算而非生成。"""
 from __future__ import annotations
 
 import json
@@ -145,6 +144,10 @@ def _run_correlation(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult
     r, p = _round(res.statistic), _round(raw_p)
     if r is None or p is None:
         return _failed(plan, "变量无变异，无法计算相关系数")
+    # Fisher z 变换的 95% CI（大样本近似）
+    se_z = 1.0 / np.sqrt(max(x.size - 3, 1))
+    z = float(np.arctanh(r))
+    ci95 = [_round(float(np.tanh(z - 1.96 * se_z))), _round(float(np.tanh(z + 1.96 * se_z)))]
     effect_name = "r²" if plan.method == "pearson" else "ρ²"
     return ExperimentResult(
         experiment_id=plan.experiment_id,
@@ -160,6 +163,7 @@ def _run_correlation(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult
         p_value_raw=raw_p,
         effect_size=_round(r * r),
         effect_name=effect_name,
+        extra={"ci95": ci95},
     )
 
 
@@ -198,7 +202,23 @@ def _run_group_compare(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResu
     stat, p = _round(res.statistic), _round(raw_p)
     if stat is None or p is None:
         return _failed(plan, "组内数据无变异，检验无法计算")
-    return ExperimentResult(
+    mean_diff_ci = None
+    if plan.method in ("welch_ttest", "independent_ttest"):
+        a, b = arrays[0], arrays[1]
+        va, vb = a.var(ddof=1), b.var(ddof=1)
+        diff = float(a.mean() - b.mean())
+        if plan.method == "welch_ttest":
+            se2 = va / a.size + vb / b.size
+            se = float(np.sqrt(se2))
+            dfree = se2**2 / ((va / a.size) ** 2 / (a.size - 1) + (vb / b.size) ** 2 / (b.size - 1))
+        else:
+            sp2 = ((a.size - 1) * va + (b.size - 1) * vb) / (a.size + b.size - 2)
+            se = float(np.sqrt(sp2 * (1 / a.size + 1 / b.size)))
+            dfree = float(a.size + b.size - 2)
+        if se > 0 and dfree > 0:
+            half = float(sps.t.ppf(1 - plan.alpha / 2, dfree)) * se
+            mean_diff_ci = [_round(diff - half), _round(diff + half)]
+    result = ExperimentResult(
         experiment_id=plan.experiment_id,
         question_id=plan.question_id,
         method=plan.method,
@@ -214,6 +234,9 @@ def _run_group_compare(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResu
         effect_name=effect_name,
         groups=_group_stats(grouped),
     )
+    if mean_diff_ci:
+        result.extra["mean_diff_ci95"] = mean_diff_ci
+    return result
 
 
 def _run_paired(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult:
@@ -295,6 +318,32 @@ def _run_regression(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult:
     r, p = _round(res.rvalue), _round(raw_p)
     if r is None or p is None:
         return _failed(plan, "变量无变异，回归无法计算")
+    extra: dict = {
+        "slope": float(res.slope),
+        "intercept": float(res.intercept),
+        "stderr": float(res.stderr),
+    }
+    try:
+        import statsmodels.api as smapi
+        from statsmodels.stats import diagnostic as sm_diag
+
+        design = smapi.add_constant(x)
+        ols = smapi.OLS(y, design).fit()
+        ci_table = ols.conf_int()
+        extra.update(
+            {
+                "adj_r2": _round(ols.rsquared_adj),
+                "f_statistic": _round(float(ols.fvalue)),
+                "f_pvalue": _round(float(ols.f_pvalue)),
+                "slope_ci95": [_round(float(ci_table[1][0])), _round(float(ci_table[1][1]))],
+            }
+        )
+        if 3 < x.size <= 5000:
+            extra["resid_shapiro_p"] = _round(float(sps.shapiro(ols.resid).pvalue))
+        if x.size >= 5:
+            extra["bp_p"] = _round(float(sm_diag.het_breuschpagan(ols.resid, design)[1]))
+    except Exception:
+        pass  # 诊断失败不影响回归核心结果
     return ExperimentResult(
         experiment_id=plan.experiment_id,
         question_id=plan.question_id,
@@ -309,11 +358,7 @@ def _run_regression(plan: ExperimentPlan, df: pd.DataFrame) -> ExperimentResult:
         p_value_raw=raw_p,
         effect_size=_round(r * r),
         effect_name="r²",
-        extra={
-            "slope": float(res.slope),
-            "intercept": float(res.intercept),
-            "stderr": float(res.stderr),
-        },
+        extra=extra,
     )
 
 

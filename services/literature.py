@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """文献检索工具：arXiv 关键词检索 + 词面重排（无嵌入、无 Key，网络不可用时优雅降级）。"""
 from __future__ import annotations
 

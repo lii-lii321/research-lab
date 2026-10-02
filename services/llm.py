@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """OpenAI 兼容的 LLM 调用层（沿用 AI_BASE_URL / AI_API_KEY / AI_MODEL 约定）。"""
 from __future__ import annotations
 
@@ -27,7 +26,7 @@ class LLMConfig:
         self.model = model
 
     @classmethod
-    def from_env(cls) -> "LLMConfig | None":
+    def from_env(cls) -> LLMConfig | None:
         api_key = os.getenv("AI_API_KEY", "").strip()
         if not api_key:
             return None

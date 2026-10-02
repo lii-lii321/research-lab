@@ -85,5 +85,6 @@ copy .env.example .env    # 填入 AI_API_KEY（SiliconFlow / 智谱 / DeepSeek 
 
 ## 测试与质量
 
-pytest 135 用例（含 Streamlit AppTest 界面级冒烟），CI 每次推送全量运行；
+pytest 全量用例（含 Streamlit AppTest 界面级冒烟）进 CI，每次推送运行；
+覆盖率、ruff、mypy 由 CI 门禁强制（覆盖率阈值 85%）。
 `scripts/smoke_check.py` 对真实启动的 API 与 UI 做九项端到端探活（含真实 arXiv 检索）。

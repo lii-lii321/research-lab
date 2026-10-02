@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import json
 
 import pytest
@@ -10,8 +9,8 @@ from services.llm import get_llm_client
 client = TestClient(app)
 
 CSV = (
-    "attendance_rate,final_score,gender\n80,70,M\n90,85,F\n70,60,M\n85,90,F\n"
-).encode("utf-8")
+    b"attendance_rate,final_score,gender\n80,70,M\n90,85,F\n70,60,M\n85,90,F\n"
+)
 
 RQ_JSON = json.dumps(
     [
@@ -53,7 +52,7 @@ def test_health():
 
 
 def test_profile_csv():
-    content = "a,b\n1,x\n2,y\n3,z\n4,x\n".encode("utf-8")
+    content = b"a,b\n1,x\n2,y\n3,z\n4,x\n"
     resp = client.post("/api/profile", files={"file": ("t.csv", content, "text/csv")})
     assert resp.status_code == 200
     body = resp.json()

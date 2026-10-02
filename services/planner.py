@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
 """实验计划生成：LLM 起草，变量类型规则校验与兜底——数字永远不由 LLM 决定方法学。"""
 from __future__ import annotations
 
 from models.schemas import ExperimentPlan, ProfileReport, ResearchQuestion
 from services.executor import RUNNER_METHODS
 from services.llm import LLMClient, LLMError
+from services.power import required_n
 from utils.textjson import extract_json_object
 
 # 与执行层单一来源：白名单不再单独维护，杜绝两边漂移
@@ -138,6 +138,7 @@ def generate_experiment_plan(
     if not variables:
         raise ValueError(f"研究问题 {rq.id} 的变量都不在数据集中")
     fallback = suggest_method(report, variables)
+    final: ExperimentPlan | None = None
 
     if client is not None:
         type_map = {c.name: c.type for c in report.columns}
@@ -170,5 +171,19 @@ def generate_experiment_plan(
                         ],
                     )
                 )
-            return plan
-    return _rule_plan(rq, variables, fallback)
+            final = plan
+    if final is None:
+        final = _rule_plan(rq, variables, fallback)
+
+    final.required_n = required_n(final.method, final.alpha)
+    if final.required_n:
+        final.notes = "；".join(
+            filter(
+                None,
+                [
+                    final.notes,
+                    f"功效分析：α={final.alpha}、power=0.8、中等效应假设下约需 {final.required_n} 例观测",
+                ],
+            )
+        )
+    return final

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from io import BytesIO
 
 import pandas as pd
@@ -8,7 +7,7 @@ from utils.io import read_tabular
 
 
 def test_read_utf8_csv():
-    content = "name,score\nAnn,90\nBob,80\n".encode("utf-8")
+    content = b"name,score\nAnn,90\nBob,80\n"
     df = read_tabular("t.csv", content)
     assert list(df.columns) == ["name", "score"]
     assert len(df) == 2

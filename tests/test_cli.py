@@ -1,16 +1,14 @@
-﻿# -*- coding: utf-8 -*-
-"""命令行入口测试：直接调用 cli.main，不经过子进程。"""
+﻿"""命令行入口测试：直接调用 cli.main，不经过子进程。"""
 import pytest
 
 from cli import main
 from services.reports_store import get_report, list_reports
-from services.tracking import TrackingStore
 
 CSV_ROWS = "\n".join(
     f"{i / 10:.2f},{2 * i / 10 + 1 + ((i * 7) % 5 - 2) * 0.2:.2f},{'M' if i % 2 else 'F'}"
     for i in range(40)
 )
-CSV = f"hours,score,gender\n{CSV_ROWS}".encode("utf-8")
+CSV = f"hours,score,gender\n{CSV_ROWS}".encode()
 
 
 @pytest.fixture

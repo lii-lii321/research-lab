@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """LLM 客户端与降级链路的单元测试（真实 httpx 调用层，FakeLLM 之外的盲区）。"""
 import httpx
 import numpy as np

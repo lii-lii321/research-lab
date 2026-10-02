@@ -297,10 +297,10 @@ for attempt in range(3):
 
 ## 附：落实清单（按序打勾）
 
-- [ ] D1 ruff+mypy+cov85 门禁进 CI
-- [ ] D2 pip-compile 锁定依赖
-- [ ] D3 README 测试数字去漂移
-- [ ] A1 statsmodels：CI+诊断+功效（≥5 新用例）
+- [x] D1 ruff+mypy+cov85 门禁进 CI
+- [x] D2 pip-compile 锁定依赖
+- [x] D3 README 测试数字去漂移
+- [x] A1 statsmodels：CI+诊断+功效（≥5 新用例）
 - [ ] B1 调优-持久化-解释三件套
 - [ ] B2 自动模型卡片
 - [ ] E2 LLM 指数退避重试

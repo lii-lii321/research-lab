@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """研究报告构建：Markdown + HTML，全部内容来自已执行的真实结果。"""
 from __future__ import annotations
 
@@ -6,12 +5,12 @@ import html as html_lib
 from datetime import datetime
 
 from models.schemas import (
+    TYPE_CN,
     ExperimentRecord,
     MLExperimentResult,
     PaperRef,
     ProfileReport,
     ResearchQuestion,
-    TYPE_CN,
 )
 from services.executor import METHOD_CN, format_p
 from services.literature import snippet
@@ -29,7 +28,8 @@ LIMITATIONS = [
     "本报告所有检验均为相关或组间差异分析，不构成因果推断。",
     "结论仅基于当前数据集，向其他人群或场景外推需谨慎。",
     "缺失值处理：相关与配对检验按有效配对剔除，组间与卡方检验按整行剔除。",
-    "研究问题由同一数据画像生成并逐个检验，全部结论均为探索性分析；结论表所附 Benjamini–Hochberg 校正后 p 值供多重比较参考。",
+    "研究问题由同一数据画像生成并逐个检验，全部结论均为探索性分析；"
+    "结论表所附 Benjamini–Hochberg 校正后 p 值供多重比较参考。",
     "标注来源为 LLM 的解读文字由模型生成，仅供参考；全部统计数字由本地 scipy 真实计算。",
 ]
 
@@ -98,6 +98,10 @@ def _experiment_lines_md(rec: ExperimentRecord) -> list[str]:
         f"- H0：{_md(plan.h0)} ｜ H1：{_md(plan.h1)} ｜ α = {plan.alpha}",
         f"- 变量：{_md('、'.join(plan.variables))}（计划来源：{source_cn}）",
     ]
+    if plan.required_n:
+        lines.append(
+            f"- 所需样本量：约 {plan.required_n} 例观测（α = {plan.alpha}、power = 0.8、中等效应假设）"
+        )
     if res.status != "ok":
         lines.append(f"- 执行结果：**未完成** — {_md(res.reason)}")
         return lines
@@ -114,6 +118,9 @@ def _experiment_lines_md(rec: ExperimentRecord) -> list[str]:
     interp_source = "LLM" if res.interpretation_source == "llm" else "规则模板"
     lines.append(f"- 结果：**{stat_txt}**，{p_txt} → **{decision}**{effect}")
     lines.append(f"- 样本：有效 {res.n_used} / 总 {res.n_used + res.n_dropped}")
+    ci = res.extra.get("ci95") or res.extra.get("mean_diff_ci95") or res.extra.get("slope_ci95")
+    if ci:
+        lines.append(f"- 95% CI：[{ci[0]}, {ci[1]}]")
     lines.append(f"- 解读（来源：{interp_source}）：{_md(res.interpretation)}")
     return lines
 
@@ -135,12 +142,12 @@ def build_markdown(
 
     d = profile.dataset
     lines = [
-        f"# AI 数据科学研究报告",
+        "# AI 数据科学研究报告",
         "",
         f"- 数据集：{dataset_name}",
         f"- 生成时间：{generated}",
-        f"- 复现说明：全部统计量由 scipy 在本地对上传数据真实计算；"
-        f"LLM 仅参与研究问题提出与结果解读，且均已在正文标注来源。",
+        "- 复现说明：全部统计量由 scipy 在本地对上传数据真实计算；"
+        "LLM 仅参与研究问题提出与结果解读，且均已在正文标注来源。",
         "",
         heading("数据画像"),
         "",
@@ -307,7 +314,8 @@ def build_html(
         "<title>AI 数据科学研究报告</title><style>"
         "body{font-family:'Microsoft YaHei',system-ui,sans-serif;color:#334155;background:#f8fafc;margin:0;}"
         ".page{max-width:860px;margin:24px auto;background:#fff;padding:48px 56px;border:1px solid #e2e8f0;}"
-        "h1{color:#1a365d;font-size:22px;}h2{color:#1a365d;font-size:17px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;}"
+        "h1{color:#1a365d;font-size:22px;}"
+        "h2{color:#1a365d;font-size:17px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;}"
         "h3{color:#1a365d;font-size:15px;}"
         "table{border-collapse:collapse;width:100%;font-size:13px;margin:12px 0;}"
         "th,td{border:1px solid #e2e8f0;padding:6px 10px;text-align:left;}"
@@ -319,7 +327,8 @@ def build_html(
     parts.append("<h1>AI 数据科学研究报告</h1>")
     parts.append(
         f"<p class=\"meta\">数据集：{_esc(dataset_name)} ｜ 生成时间：{_esc(generated)}<br>"
-        f"复现说明：全部统计量由 scipy 在本地对上传数据真实计算；LLM 仅参与研究问题提出与结果解读，均已在正文标注来源。</p>"
+        "复现说明：全部统计量由 scipy 在本地对上传数据真实计算；"
+        "LLM 仅参与研究问题提出与结果解读，均已在正文标注来源。</p>"
     )
     parts.append(heading("数据画像") + "<ul>")
     parts.append(

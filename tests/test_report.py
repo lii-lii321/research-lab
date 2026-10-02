@@ -1,17 +1,13 @@
-# -*- coding: utf-8 -*-
 import numpy as np
 import pandas as pd
 
-from models.schemas import ExperimentRecord, ResearchQuestion
+from models.schemas import ExperimentPlan, ExperimentRecord, ResearchQuestion
 from services.executor import run_experiment
-from services.planner import _rule_plan
 from services.profiler import profile_dataset
 from services.report import build_html, build_markdown, build_report
 
 
-def make_plan(method: str, variables: list[str]) -> "ExperimentPlan":
-    from models.schemas import ExperimentPlan
-
+def make_plan(method: str, variables: list[str]) -> ExperimentPlan:
     return ExperimentPlan(
         experiment_id="EXP-RQ1",
         question_id="RQ1",
@@ -62,6 +58,7 @@ def test_markdown_contains_real_numbers_and_structure():
     assert "scipy" in md and "复现说明" in md
     assert "不构成因果推断" in md
     assert "探索性分析" in md and "BH" in md  # BH 校正列与多重比较声明
+    assert "95% CI" in md  # 效应量置信区间
     assert record.result.interpretation in md
     assert ("LLM" in md) if record.result.interpretation_source == "llm" else ("规则模板" in md)
 

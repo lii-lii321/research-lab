@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from fastapi import APIRouter, HTTPException
 
 from services.reports_store import get_report, list_reports

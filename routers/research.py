@@ -1,10 +1,8 @@
-﻿# -*- coding: utf-8 -*-
-import json
+﻿import json
 from pathlib import PurePosixPath, PureWindowsPath
+from typing import Annotated
 
-from typing import Annotated, Optional
-
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import ValidationError
 
@@ -15,12 +13,12 @@ from models.schemas import (
     ReportBundle,
     ResearchQuestion,
 )
+from routers.deps import get_tracking_store
 from services.executor import run_experiment
 from services.llm import LLMClient, LLMError, get_llm_client
 from services.planner import generate_experiment_plan
-from services.research_questions import generate_research_questions_auto
 from services.report import build_report
-from routers.deps import get_tracking_store
+from services.research_questions import generate_research_questions_auto
 from services.tracking import TrackingStore
 from utils.uploads import load_dataset
 
@@ -31,7 +29,7 @@ router = APIRouter(prefix="/api", tags=["research"])
 async def research_questions(
     file: UploadFile,
     task: str = Form(""),
-    client: Annotated[Optional[LLMClient], Depends(get_llm_client)] = None,
+    client: Annotated[LLMClient | None, Depends(get_llm_client)] = None,
 ) -> list[ResearchQuestion]:
     df, report = await load_dataset(file)
     return await run_in_threadpool(generate_research_questions_auto, df, report, client, task)
@@ -43,7 +41,7 @@ async def experiment_plan(
     question: str = Form(...),
     variables: str = Form(""),
     question_id: str = Form("RQ1"),
-    client: Annotated[Optional[LLMClient], Depends(get_llm_client)] = None,
+    client: Annotated[LLMClient | None, Depends(get_llm_client)] = None,
 ) -> ExperimentPlan:
     df, report = await load_dataset(file)
     variables_list = [v.strip() for v in variables.split(",") if v.strip()]
@@ -68,8 +66,8 @@ async def execute_experiment(
     h1: str = Form(""),
     alpha: float = Form(0.05),
     dataset_name: str = Form(""),
-    store: Annotated[Optional[TrackingStore], Depends(get_tracking_store)] = None,
-    client: Annotated[Optional[LLMClient], Depends(get_llm_client)] = None,
+    store: Annotated[TrackingStore | None, Depends(get_tracking_store)] = None,
+    client: Annotated[LLMClient | None, Depends(get_llm_client)] = None,
 ) -> ExperimentResult:
     if not 0 < alpha < 0.5:
         raise HTTPException(status_code=422, detail="alpha 必须在 0 与 0.5 之间")

@@ -1,11 +1,8 @@
-# -*- coding: utf-8 -*-
 import numpy as np
 import pandas as pd
 import pytest
 
-from models.schemas import ProfileReport
 from services.ml_lab import (
-    DataProblem,
     infer_task,
     run_ml_experiment,
     select_features,

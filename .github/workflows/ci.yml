@@ -16,10 +16,14 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: pip install -r requirements.txt
+      - name: Lint (ruff) and type-check (mypy)
+        run: |
+          ruff check .
+          mypy
       - name: Generate sample data
         run: python scripts/generate_sample.py
-      - name: Run tests
-        run: pytest -q -rs
+      - name: Run tests with coverage gate
+        run: pytest -q -rs --cov=services --cov-report=term --cov-fail-under=85
 
   smoke:
     runs-on: ubuntu-latest

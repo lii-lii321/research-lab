@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
-from typing import Annotated, Optional
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
 from models.schemas import AgentRunResult
@@ -21,8 +20,8 @@ async def agent_run(
     max_questions: int = Form(3),
     with_literature: bool = Form(True),
     dataset_name: str = Form(""),
-    store: Annotated[Optional[TrackingStore], Depends(get_tracking_store)] = None,
-    client: Annotated[Optional[LLMClient], Depends(get_llm_client)] = None,
+    store: Annotated[TrackingStore | None, Depends(get_tracking_store)] = None,
+    client: Annotated[LLMClient | None, Depends(get_llm_client)] = None,
 ) -> AgentRunResult:
     df, profile = await load_dataset(file)
     name = dataset_name.strip() or file.filename or "dataset"

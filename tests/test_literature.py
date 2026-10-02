@@ -1,7 +1,5 @@
-# -*- coding: utf-8 -*-
 import numpy as np
 import pandas as pd
-import pytest
 
 from models.schemas import ResearchQuestion
 from services.literature import (
@@ -118,7 +116,6 @@ def test_search_literature_non_200_ignored():
 
 def test_search_related_caps_top_n():
     profile = make_profile()
-    fetched = parse_atom(FIXTURE_ATOM) * 3
 
     def fake_fetch(url, params=None, timeout=None):
         return FakeResponse(FIXTURE_ATOM)

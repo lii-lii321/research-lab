@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """Research Agent：一句话研究任务自动走完全流程（规则模式无需 LLM）。"""
 from __future__ import annotations
 
 import time
+from typing import Literal
 
 from models.schemas import (
     AgentRunResult,
@@ -18,8 +18,8 @@ from services.literature import search_related
 from services.llm import LLMClient
 from services.ml_lab import run_ml_experiment
 from services.planner import generate_experiment_plan
-from services.research_questions import generate_research_questions_auto
 from services.report import build_report
+from services.research_questions import generate_research_questions_auto
 from services.tracking import TrackingStore
 
 
@@ -128,7 +128,7 @@ def run_research_agent(
         step("文献检索", do_literature)
     step("研究报告", do_report)
 
-    status = "ok" if (questions and report_md) else "failed"
+    status: Literal["ok", "failed"] = "ok" if (questions and report_md) else "failed"
     reason = "" if status == "ok" else "未能生成研究问题或报告，详见步骤时间线"
     return AgentRunResult(
         status=status,

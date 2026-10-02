@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """复现脚本生成器：产物必须是合法 Python 且包含真实统计调用。"""
 from models.schemas import ExperimentPlan
 from services.repro import build_repro_script
@@ -62,7 +61,7 @@ def test_paired_and_regression_valid():
     assert "stats.ttest_rel" in src
     src2 = build_repro_script(make_plan("linear_regression", ["x", "y"]))
     assert_valid(src2)
-    assert "stats.linregress" in src2
+    assert "sm.OLS" in src2 and "statsmodels" in src2
 
 
 def test_unknown_method_still_valid_python():

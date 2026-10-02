@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import pytest
 
 from utils.textjson import extract_json_array, extract_json_object

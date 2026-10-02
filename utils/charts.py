@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """matplotlib 图表构建（白底、藏青标题、蓝色主色）。"""
 from __future__ import annotations
 

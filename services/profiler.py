@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Dataset Profiler：纯 pandas/numpy 的确定性数据画像，不依赖 LLM。"""
 from __future__ import annotations
 
@@ -9,6 +8,7 @@ import pandas as pd
 
 from models.schemas import (
     ColumnProfile,
+    ColumnType,
     CorrelationPair,
     DatasetOverview,
     NumericStats,
@@ -16,6 +16,7 @@ from models.schemas import (
     TargetCandidate,
     TopValue,
     WarningItem,
+    WarningLevel,
 )
 
 LOW_CARDINALITY_MAX = 50
@@ -56,7 +57,7 @@ def _name_is_id_like(name: str) -> bool:
     return any(h in lowered for h in _ID_NAME_HINTS)
 
 
-def infer_column_type(series: pd.Series) -> str:
+def infer_column_type(series: pd.Series) -> ColumnType:
     non_null = series.dropna()
     if non_null.empty:
         return "empty"
@@ -216,7 +217,7 @@ def _collect_warnings(
         )
     for c in columns:
         if c.missing_rate >= HIGH_MISSING_RATE:
-            level = "critical" if c.missing_rate >= CRITICAL_MISSING_RATE else "warning"
+            level: WarningLevel = "critical" if c.missing_rate >= CRITICAL_MISSING_RATE else "warning"
             out.append(
                 WarningItem(
                     level=level,
@@ -294,7 +295,7 @@ def profile_dataset(df: pd.DataFrame) -> ProfileReport:
     if df.shape[0] == 0 or df.shape[1] == 0:
         raise ValueError("数据集为空（0 行或 0 列），无法生成画像")
     columns = [profile_column(df[col]) for col in df.columns]
-    type_counts = dict(Counter(c.type for c in columns))
+    type_counts: dict[str, int] = dict(Counter(str(c.type) for c in columns))
     n_rows = int(df.shape[0])
     missing_cells = int(df.isna().sum().sum())
     duplicate_rows = int(df.duplicated().sum())

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from fastapi import APIRouter, HTTPException, UploadFile
 
 from models.schemas import ProfileReport
