@@ -280,7 +280,14 @@ def _cv_scores(
     return primary, scores
 
 
-def _run_supervised(df: pd.DataFrame, task: str, target: str, numeric: list[str], categorical: list[str]):
+def _run_supervised(
+    df: pd.DataFrame,
+    task: str,
+    target: str,
+    numeric: list[str],
+    categorical: list[str],
+    progress_cb=None,
+):
     feature_cols = numeric + categorical
     if target not in df.columns:
         raise ValueError(f"目标列 {target} 不在数据集中")
@@ -315,9 +322,11 @@ def _run_supervised(df: pd.DataFrame, task: str, target: str, numeric: list[str]
     preprocessor = _preprocessor(numeric, categorical)
     results: list[MLModelResult] = []
     fitted_pipelines: dict[str, Pipeline] = {}
-    for name, estimator, params in (
-        _regression_models() if task == "regression" else _classification_models()
-    ):
+    model_defs = _regression_models() if task == "regression" else _classification_models()
+    total = len(model_defs)
+    for idx, (name, estimator, params) in enumerate(model_defs, 1):
+        if progress_cb:
+            progress_cb(f"训练模型 {idx}/{total}：{name}")
         pipe = Pipeline([("prep", preprocessor), ("model", estimator)])
         started = time.perf_counter()
         pipe.fit(X_train, y_train)
@@ -438,6 +447,7 @@ def run_ml_experiment(
     store: TrackingStore | None = None,
     dataset_name: str = "dataset",
     persist_dir: str | Path | None = None,
+    progress_cb=None,
 ) -> MLExperimentResult:
     started = time.perf_counter()
     if task not in TASKS:
@@ -464,7 +474,7 @@ def run_ml_experiment(
         if not numeric + categorical:
             return _failed(task, "没有可用特征（标识符 / 高缺失 / 文本列被排除）")
         try:
-            bundle = _run_supervised(df, task, target, numeric, categorical)
+            bundle = _run_supervised(df, task, target, numeric, categorical, progress_cb)
         except DataProblem as exc:
             return _failed(task, str(exc))
         models = bundle["results"]

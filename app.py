@@ -1,4 +1,4 @@
-﻿"""AI Data Research Lab — Streamlit 前端（分析流程 / ML 实验室 / 实验追踪）。"""
+"""AI Data Research Lab — Streamlit 前端（分析流程 / ML 实验室 / 实验追踪）。"""
 from __future__ import annotations
 
 import json
@@ -23,6 +23,7 @@ from services.tracking import TrackingStore, dataframe_fingerprint
 from ui.errors import show_error_card
 from utils.charts import correlation_heatmap, result_figure
 from utils.io import read_tabular
+from utils.sample_data import DATASET_GALLERY
 
 st.set_page_config(page_title="AI Data Research Lab", page_icon="🗂", layout="wide")
 st.markdown(
@@ -50,28 +51,52 @@ def cached_profile(df: pd.DataFrame) -> ProfileReport:
 def load_source() -> tuple[pd.DataFrame | None, str | None]:
     with st.sidebar:
         st.header("数据源")
-        uploaded = st.file_uploader("上传 CSV / Excel（≤50MB）", type=["csv", "xlsx"])
-        use_sample = st.checkbox("使用示例数据（学生成绩）", value=uploaded is None)
-        if uploaded is not None:
-            try:
-                st.session_state["dataset_name"] = uploaded.name
-                return read_tabular(uploaded.name, uploaded.getvalue()), None
-            except ValueError as exc:
-                return None, str(exc)
-        if use_sample:
-            st.session_state["dataset_name"] = SAMPLE_PATH.name
-            # 运行时自愈：示例文件缺失则内存现生成（新克隆零步骤可用）
-            if SAMPLE_PATH.exists():
+        source_mode = st.radio(
+            "方式",
+            ["示例数据", "上传文件", "粘贴表格"],
+            label_visibility="collapsed",
+            key="source_mode",
+        )
+        if source_mode == "上传文件":
+            uploaded = st.file_uploader("上传 CSV / Excel（≤50MB）", type=["csv", "xlsx"])
+            if uploaded is not None:
                 try:
-                    return read_tabular(SAMPLE_PATH.name, SAMPLE_PATH.read_bytes()), None
+                    st.session_state["dataset_name"] = uploaded.name
+                    return read_tabular(uploaded.name, uploaded.getvalue()), None
                 except ValueError as exc:
                     return None, str(exc)
-            try:
-                from utils.sample_data import build_sample_dataframe
+            return None, None
+        if source_mode == "粘贴表格":
+            st.caption("从 Excel 复制区域后，直接粘贴到下方表格（首行为表头）。")
+            edited = st.data_editor(
+                pd.DataFrame({"列1": [""] * 5}),
+                num_rows="dynamic",
+                use_container_width=True,
+                key="paste_grid",
+            )
+            if st.button("使用粘贴的数据", type="primary", key="paste_use"):
+                cleaned = edited.replace("", pd.NA).dropna(how="all").dropna(axis=1, how="all")
+                if cleaned.empty:
+                    st.warning("表格为空：粘贴数据或至少填入一行。")
+                    return None, None
+                st.session_state["dataset_name"] = "pasted_data"
+                return cleaned.reset_index(drop=True), None
+            return None, None
 
-                return build_sample_dataframe(), None
-            except Exception as exc:  # 自愈也失败才报错
-                return None, f"示例数据生成失败：{exc}"
+        # 示例数据画廊
+        gallery = st.selectbox("选择示例数据集", list(DATASET_GALLERY), key="sample_pick")
+        sample_names = {"学生成绩": "student_performance.csv", "门店销售": "store_sales.csv", "医疗随访": "cohort.csv"}
+        st.session_state["dataset_name"] = sample_names.get(gallery, gallery)
+        # 刷新恢复：URL 带 data=sample 时自动重载示例
+        try:
+            st.query_params["data"] = "sample"
+        except Exception:
+            pass
+        try:
+            builder = DATASET_GALLERY[gallery]
+            return builder(), None
+        except Exception as exc:  # 自愈失败才报错
+            return None, f"示例数据生成失败：{exc}"
     return None, None
 
 
@@ -351,7 +376,13 @@ def render_ml_lab(df: pd.DataFrame, report: ProfileReport) -> None:
     )
     target = None if sel_target.startswith("（") else sel_target
     if st.button("运行 ML 基线实验", type="primary", key="run_ml"):
-        with st.spinner("正在训练与评估模型…"):
+        with st.status("正在训练与评估模型…", expanded=True) as training:
+            progress_lines: list[str] = []
+
+            def _ml_progress(msg: str) -> None:
+                progress_lines.append(msg)
+                training.write("· " + msg)
+
             try:
                 st.session_state["ml_result"] = run_ml_experiment(
                     df,
@@ -361,10 +392,14 @@ def render_ml_lab(df: pd.DataFrame, report: ProfileReport) -> None:
                     store=TrackingStore(),
                     dataset_name=st.session_state.get("dataset_name", "dataset"),
                     persist_dir="data/models",
+                    progress_cb=_ml_progress,
                 )
             except ValueError as exc:
                 show_error_card(str(exc))
                 st.session_state.pop("ml_result", None)
+                training.update(label="训练失败", state="error")
+            else:
+                training.update(label="训练完成", state="complete", expanded=False)
     result: MLExperimentResult | None = st.session_state.get("ml_result")
     if result is None:
         return

@@ -35,6 +35,7 @@ def run_research_agent(
     dataset_name: str = "dataset",
     enable_literature: bool = True,
     enable_ml: bool = True,
+    on_step=None,
 ) -> AgentRunResult:
     started = time.perf_counter()
     steps: list[AgentStep] = []
@@ -49,24 +50,32 @@ def run_research_agent(
         step_started = time.perf_counter()
         try:
             detail = fn()
-            steps.append(
-                AgentStep(
-                    name=name,
-                    status="ok",
-                    detail=detail,
-                    seconds=round(time.perf_counter() - step_started, 3),
-                )
+            record = AgentStep(
+                name=name,
+                status="ok",
+                detail=detail,
+                seconds=round(time.perf_counter() - step_started, 3),
             )
+            steps.append(record)
+            if on_step is not None:
+                try:
+                    on_step(record)
+                except Exception:
+                    pass  # 进度回调失败不影响流程
             return True
         except Exception as exc:  # agent 边界：任何失败都进时间线而不是中断会话
-            steps.append(
-                AgentStep(
-                    name=name,
-                    status="failed",
-                    detail=str(exc),
-                    seconds=round(time.perf_counter() - step_started, 3),
-                )
+            record = AgentStep(
+                name=name,
+                status="failed",
+                detail=str(exc),
+                seconds=round(time.perf_counter() - step_started, 3),
             )
+            steps.append(record)
+            if on_step is not None:
+                try:
+                    on_step(record)
+                except Exception:
+                    pass
             return False
 
     def do_questions() -> str:

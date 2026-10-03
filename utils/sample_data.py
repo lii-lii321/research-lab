@@ -42,3 +42,57 @@ def build_sample_dataframe() -> pd.DataFrame:
     df.loc[outlier_idx, "attendance_rate"] = 20.0
     dup_idx = rng.choice(n, size=DUPLICATE_ROWS, replace=False)
     return pd.concat([df, df.loc[dup_idx]], ignore_index=True)
+
+
+def build_sales_dataframe(n_days: int = 120) -> pd.DataFrame:
+    """演示数据集：门店日销售（季节性 + 周末效应 + 缺失 + 离群）。"""
+    rng = np.random.default_rng(7)
+    days = pd.date_range("2026-01-01", periods=n_days, freq="D")
+    weekend = np.array([1.0 if d.weekday() >= 5 else 0.6 for d in days])
+    base = 800 * weekend * (1 + 0.3 * np.sin(np.arange(n_days) / 14))
+    promo = rng.choice([0, 1], n_days, p=[0.8, 0.2])
+    revenue = np.round(base * (1 + 0.4 * promo) * rng.normal(1, 0.08, n_days), 1)
+    df = pd.DataFrame(
+        {
+            "date": days.strftime("%Y-%m-%d"),
+            "weekday": [d.weekday() for d in days],
+            "is_promo": promo,
+            "visitors": np.round(revenue / rng.uniform(40, 60, n_days), 0),
+            "revenue": revenue,
+        }
+    )
+    df.loc[rng.choice(n_days, size=int(n_days * 0.04), replace=False), "visitors"] = np.nan
+    df.loc[rng.choice(n_days, size=5, replace=False), "revenue"] = np.nan
+    df.loc[rng.choice(n_days, size=4, replace=False), "revenue"] = (
+        df["revenue"].median() * 6
+    )
+    return df
+
+
+def build_medical_dataframe(n_patients: int = 200) -> pd.DataFrame:
+    """演示数据集：随访队列（类别不平衡 + 计数终点 + 协变量相关）。"""
+    rng = np.random.default_rng(11)
+    age = np.round(rng.normal(55, 12, n_patients), 0)
+    bmi = np.round(24 + 0.1 * (age - 55) + rng.normal(0, 3, n_patients), 1)
+    exercise = rng.choice(["规律", "偶尔", "不锻炼"], n_patients, p=[0.35, 0.4, 0.25])
+    risk = 0.03 + 0.02 * (bmi > 28) + 0.02 * (exercise == "不锻炼") + 0.01 * (age > 60)
+    outcome = rng.binomial(1, np.clip(risk, 0, 0.5))
+    df = pd.DataFrame(
+        {
+            "patient_id": [f"P{i:04d}" for i in range(1, n_patients + 1)],
+            "age": age,
+            "bmi": bmi,
+            "exercise": exercise,
+            "followup_visits": rng.poisson(3, n_patients),
+            "outcome_event": outcome,
+        }
+    )
+    df.loc[rng.choice(n_patients, size=8, replace=False), "bmi"] = np.nan
+    return df
+
+
+DATASET_GALLERY = {
+    "学生成绩": build_sample_dataframe,
+    "门店销售": build_sales_dataframe,
+    "医疗随访": build_medical_dataframe,
+}
