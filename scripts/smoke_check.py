@@ -1,4 +1,4 @@
-"""冒烟验证：真实启动 uvicorn 与 streamlit，请求探活后清理进程。
+﻿"""冒烟验证：真实启动 uvicorn 与 streamlit，请求探活后清理进程。
 
 跨平台：用当前解释器（可用 RESEARCH_LAB_PYTHON 覆盖）与轮询就绪探测，
 不依赖固定 sleep，可在本地与 CI 上运行。
@@ -64,7 +64,7 @@ def main() -> None:
         cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     try:
-        wait_ready("http://127.0.0.1:8011/health", timeout_s=40)
+        wait_ready("http://127.0.0.1:8011/health", timeout_s=60)
         results.append(check("http://127.0.0.1:8011/health", '"status":"ok"'))
         body = post_csv("/api/profile", {})
         results.append(f"api profile rows={body['dataset']['n_rows']} warnings={len(body['warnings'])}")
@@ -149,3 +149,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

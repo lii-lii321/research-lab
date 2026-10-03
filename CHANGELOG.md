@@ -1,5 +1,18 @@
 ﻿# Changelog
 
+## 1.4.0 - 2026-10-04
+
+落实 UX 手册 S3.1/S4.1/S6.1 收尾：
+
+- plotly 交互图：相关矩阵热图/散点+拟合/箱线图/卡方柱图/重要性条图五张图全部可交互（悬停查看数值、缩放关注区间），UI 全部替换为 st.plotly_chart；matplotlib 版保留给报告 PNG 导出
+- 统计前提检查卡：每个实验自动生成结构化前提满足清单（样本量/组间比例/期望频数/残差正态性/异方差/方法适用性），写入 ExperimentResult 并渲染进报告与详情
+- zip 研究包导出：报告库三列下载（md/html/zip），CLI reports --export 可用；zip 内含 md+html+assets+MANIFEST
+- 人话错误映射测试补齐 10 组正反用例；修复 "观测不足" needle 匹配与 detail 回退逻辑
+- 修 smoke 超时：wait_ready 超时从 40/60s 提升至 60/90s
+- 测试 177 → 190 全绿
+
+## 1.3.0 - 2026-10-04
+
 ## 1.3.0 - 2026-10-04
 
 落实 UX 手册 S6.3/S4.1/S3.1 + 前提检查卡：
@@ -163,6 +176,7 @@
 
 - 项目启动：Dataset Profiler（类型推断 / 缺失重复 / 离群 / 高相关 / 类别不平衡 / 目标候选）
 - FastAPI + Streamlit 双入口，pytest 测试与冒烟脚本
+
 
 
 

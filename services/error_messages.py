@@ -1,4 +1,4 @@
-"""错误信息人性化：把异常文本映射为"发生了什么 / 为什么 / 你可以试什么"。
+﻿"""错误信息人性化：把异常文本映射为"发生了什么 / 为什么 / 你可以试什么"。
 
 单一来源：UI 的错误卡与 API 的 detail 共用本模块的匹配规则。
 未命中的消息回退为原始文本 + 通用三步指引（绝不丢弃原始信息）。
@@ -57,7 +57,7 @@ _PLAYBOOKS: list[tuple[str, ErrorPlaybook]] = [
         },
     ),
     (
-        "样本不足",
+        "观测不足",
         {
             "title": "有效数据量不够",
             "why": "当前检验对最小样本量有要求（如配对 ≥3、组间每组 ≥2）。",
@@ -125,6 +125,7 @@ def explain(message: str) -> ErrorPlaybook:
 def detail(message: str) -> str:
     """API detail 的人话前缀（UI 与 API 文案同源）。"""
     playbook = explain(message)
-    if playbook is _GENERIC:
+    if playbook["why"] == message:
         return message
     return f"{playbook['title']}：{message}"
+
