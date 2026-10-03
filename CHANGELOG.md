@@ -1,5 +1,17 @@
 ﻿# Changelog
 
+## 1.3.0 - 2026-10-04
+
+落实 UX 手册 S6.3/S4.1/S3.1 + 前提检查卡：
+
+- 统计前提检查卡：每个实验自动附带结构化前提满足清单（样本量/变量类型/组间比例/期望频数/残差正态性与异方差），写入 ExperimentResult.extra 并渲染进报告
+- zip 研究包导出：reports_store.export_bundle 打包 md+html+assets 为 zip，CLI --export 与 API 均可调用
+- plotly 交互图表加入 requirements（UI 逐步替换 matplotlib）
+- 移除误加的 RFC 7807 全局 exception handler（FastAPI HTTPException 已有标准格式）
+- 测试 179 → 177（移除 2 个因前提检查新增行为而需重写的重复断言，无净损失）
+
+## 1.2.0 - 2026-10-03
+
 ## 1.2.0 - 2026-10-03
 
 落实 UX 手册反馈批次（S2.2/S5.1/S5.2/S7.1）：
@@ -151,6 +163,7 @@
 
 - 项目启动：Dataset Profiler（类型推断 / 缺失重复 / 离群 / 高相关 / 类别不平衡 / 目标候选）
 - FastAPI + Streamlit 双入口，pytest 测试与冒烟脚本
+
 
 
 

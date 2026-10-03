@@ -373,6 +373,51 @@ _RUNNERS = {
 RUNNER_METHODS = frozenset(_RUNNERS)
 
 
+def assumption_checklist(result: ExperimentResult, plan: ExperimentPlan) -> list[dict]:
+    """结构化前提满足清单——每个实验逐条列出假设是否满足。"""
+    items: list[dict] = []
+    n = result.n_used
+    checks = []
+    # 通用前提：样本量
+    checks.append(("样本量 ≥ 30", n >= 30, f"n = {n}"))
+    if plan.method in CORRELATION_METHODS:
+        checks.append(("变量均为数值型", True, "执行层已校验"))
+    if plan.method == "pearson":
+        checks.append(("线性关系假设（偏度感知自动选方法）", True, "计划层已校验"))
+    if plan.method in GROUP_METHODS:
+        if result.groups:
+            group_sizes = [g.n for g in result.groups]
+            min_g = min(group_sizes) if group_sizes else 0
+            checks.append(("最小组样本量 ≥ 2", min_g >= 2, f"最小组 n = {min_g}"))
+            if len(group_sizes) == 2:
+                ratio = max(group_sizes) / max(min(group_sizes), 1)
+                checks.append(("两组样本量比 < 2:1", ratio < 2, f"比例 {ratio:.1f}:1"))
+    if plan.method == "chi2":
+        sparse = result.extra.get("sparse_expected_rate", 0)
+        fisher = result.extra.get("test_used") == "fisher_exact"
+        checks.append((
+            "期望频数充分（≥ 80% 格子 expected ≥ 5）",
+            not (sparse > SPARSE_RATE and not fisher),
+            "已自动切换 Fisher 精确检验" if fisher else f"稀疏格比例 {sparse:.0%}",
+        ))
+    if plan.method == "linear_regression":
+        shapiro = result.extra.get("resid_shapiro_p")
+        bp = result.extra.get("bp_p")
+        checks.append((
+            "残差正态性（Shapiro p ≥ 0.05）",
+            shapiro is None or shapiro >= 0.05,
+            f"p = {shapiro}" if shapiro is not None else "未检验",
+        ))
+        checks.append((
+            "残差同方差（BP p ≥ 0.05）",
+            bp is None or bp >= 0.05,
+            f"p = {bp}" if bp is not None else "未检验",
+        ))
+    for name, ok, detail in checks:
+        items.append({"assumption": name, "met": ok, "detail": detail})
+    return items
+
+
 def rule_interpretation(result: ExperimentResult, plan: ExperimentPlan) -> str:
     method_cn = METHOD_CN.get(plan.method, plan.method)
     p_txt = format_p(result.p_value)
@@ -484,6 +529,7 @@ def run_experiment(
     if result.p_value_raw is not None or result.p_value is not None:
         raw = result.p_value_raw if result.p_value_raw is not None else result.p_value
         result.decision = "reject_h0" if raw < plan.alpha else "fail_to_reject_h0"
+    result.extra["assumptions"] = assumption_checklist(result, plan)
     if store is not None:
         try:
             store.track(

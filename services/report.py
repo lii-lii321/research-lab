@@ -123,6 +123,12 @@ def _experiment_lines_md(rec: ExperimentRecord) -> list[str]:
     ci = res.extra.get("ci95") or res.extra.get("mean_diff_ci95") or res.extra.get("slope_ci95")
     if ci:
         lines.append(f"- 95% CI：[{ci[0]}, {ci[1]}]")
+    assumptions = res.extra.get("assumptions", [])
+    if assumptions:
+        lines.append("- 前提检查：")
+        for a in assumptions:
+            mark = "✅" if a.get("met") else "⚠️"
+            lines.append(f"  - {mark} {a['assumption']}（{a['detail']}）")
     lines.append(f"- 解读（来源：{interp_source}）：{_md(res.interpretation)}")
     return lines
 

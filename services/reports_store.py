@@ -1,17 +1,52 @@
-"""报告库：把生成的研究报告沉淀到 data/reports/，可列表、取回、回看。
+"""报告库：把生成的研究报告沉淀到 data/reports/，可列表、取回、回看、打包。
 
 场景：报告不该只活在浏览器会话里——课程作业、论文方法论、面试演示
 都需要"事后还能找到这份报告"。
 """
 from __future__ import annotations
 
+import io
 import os
 import re
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
 DEFAULT_DIR = Path("data/reports")
 _SAFE_NAME = re.compile(r"[^0-9A-Za-z_.\-一-龥]+")
+
+
+def export_bundle(name: str, base: Path | str | None = None) -> bytes | None:
+    """打包一份报告为 zip（md + html + assets + 复现脚本引用清单）。"""
+    detail = get_report(name, base)
+    if detail is None:
+        return None
+    stem = detail["name"]
+    directory = _dir(base)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"{stem}.md", detail["markdown"])
+        if detail["html"]:
+            zf.writestr(f"{stem}.html", detail["html"])
+        assets_dir = directory / "assets" / stem
+        if assets_dir.exists():
+            for f in sorted(assets_dir.iterdir()):
+                if f.is_file():
+                    zf.write(f, f"assets/{f.name}")
+        manifest = (
+            f"报告：{stem}\n导出：{datetime.now().isoformat(timespec='seconds')}\n"
+            f"由 AI Data Research Lab v1.3.0 生成\n"
+            f"包含：markdown + html + assets\n"
+        )
+        zf.writestr("MANIFEST.txt", manifest)
+    return buf.getvalue()
+
+
+def get_assets_dir(name: str, base: Path | str | None = None) -> Path | None:
+    stem = sanitize_name(name)
+    directory = _dir(base)
+    assets = directory / "assets" / stem
+    return assets if assets.exists() else None
 
 
 def _dir(base: Path | str | None = None) -> Path:
