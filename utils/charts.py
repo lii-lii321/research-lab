@@ -1,4 +1,4 @@
-"""matplotlib 图表构建（白底、藏青标题、蓝色主色）。"""
+"""图表构建：matplotlib（报告 PNG 导出）+ plotly（UI 交互渲染）。"""
 from __future__ import annotations
 
 import matplotlib
@@ -7,6 +7,8 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 
 plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "sans-serif"]
 plt.rcParams["axes.unicode_minus"] = False
@@ -17,6 +19,78 @@ MAX_HISTOGRAM_PLOTS = 6
 NAVY = "#1a365d"
 BLUE = "#2563eb"
 SLATE = "#334155"
+
+_PLOTLY_LAYOUT = dict(
+    font=dict(family="Microsoft YaHei, sans-serif", color=SLATE),
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    margin=dict(l=40, r=20, t=36, b=40),
+)
+
+
+def plotly_heatmap(df: pd.DataFrame, numeric_cols: list[str]):
+    cols = [c for c in numeric_cols if c in df.columns][:MAX_HEATMAP_COLS]
+    if len(cols) < 2:
+        return None
+    corr = df[cols].apply(pd.to_numeric, errors="coerce").corr()
+    fig = px.imshow(
+        corr, text_auto=".2f" if len(cols) <= 8 else None,
+        color_continuous_scale="RdBu_r", zmin=-1, zmax=1,
+        labels=dict(color="相关系数"),
+    )
+    fig.update_layout(**_PLOTLY_LAYOUT, height=max(360, 52 * len(cols)))
+    return fig
+
+
+def plotly_scatter(df: pd.DataFrame, x: str, y: str):
+    sub = df[[x, y]].apply(pd.to_numeric, errors="coerce").dropna()
+    if sub.empty:
+        return None
+    fig = px.scatter(sub, x=x, y=y, opacity=0.65, color_discrete_sequence=[BLUE])
+    import numpy as np
+
+    if len(sub) >= 2:
+        slope, intercept = np.polyfit(sub[x].astype(float), sub[y].astype(float), 1)
+        xs = sorted(sub[x].astype(float))
+        fig.add_scatter(
+            x=[min(xs), max(xs)],
+            y=[slope * min(xs) + intercept, slope * max(xs) + intercept],
+            mode="lines", name="拟合线",
+            line=dict(color=NAVY, width=2),
+        )
+    fig.update_layout(**_PLOTLY_LAYOUT, height=400, showlegend=False)
+    return fig
+
+
+def plotly_box(df: pd.DataFrame, group: str, value: str):
+    frame = pd.DataFrame({
+        "g": df[group].astype(str),
+        "v": pd.to_numeric(df[value], errors="coerce"),
+    }).dropna()
+    if frame.empty:
+        return None
+    fig = px.box(frame, x="g", y="v", color="g", color_discrete_sequence=[BLUE, "#93c5fd", NAVY])
+    fig.update_layout(**_PLOTLY_LAYOUT, height=400, showlegend=False)
+    return fig
+
+
+def plotly_bar(df: pd.DataFrame, group: str, label: str):
+    ct = pd.crosstab(df[group].astype(str), df[label].astype(str))
+    fig = go.Figure()
+    for _i, col in enumerate(ct.columns):
+        fig.add_bar(x=ct.index.astype(str), y=ct[col], name=str(col))
+    fig.update_layout(barmode="group", **_PLOTLY_LAYOUT, height=400)
+    return fig
+
+
+def plotly_importance(items: list[dict]):
+    if not items:
+        return None
+    names = [i["feature"] for i in reversed(items)]
+    values = [i["importance"] for i in reversed(items)]
+    fig = go.Figure(go.Bar(x=values, y=names, orientation="h", marker_color=BLUE))
+    fig.update_layout(**_PLOTLY_LAYOUT, height=max(280, 36 * len(items)))
+    return fig
 
 
 def numeric_histograms(df: pd.DataFrame, cols: list[str], max_plots: int = MAX_HISTOGRAM_PLOTS):

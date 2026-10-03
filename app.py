@@ -16,12 +16,18 @@ from services.planner import generate_experiment_plan
 from services.profiler import profile_dataset
 from services.report import build_report
 from services.report_images import collect_profile_images
-from services.reports_store import get_report, list_reports, save_report
+from services.reports_store import export_bundle, get_report, list_reports, save_report
 from services.repro import build_repro_script
 from services.research_questions import generate_research_questions_auto
 from services.tracking import TrackingStore, dataframe_fingerprint
 from ui.errors import show_error_card
-from utils.charts import correlation_heatmap, result_figure
+from utils.charts import (
+    plotly_bar,
+    plotly_box,
+    plotly_heatmap,
+    plotly_scatter,
+    result_figure,
+)
 from utils.io import read_tabular
 from utils.sample_data import DATASET_GALLERY
 
@@ -127,6 +133,16 @@ def render_result_chart(df: pd.DataFrame, plan: ExperimentPlan, result) -> None:
     fig = result_figure(df, plan, result)
     if fig is not None:
         st.pyplot(fig)
+    method, variables = plan.method, plan.variables
+    pfig = None
+    if method in ("pearson", "spearman", "linear_regression") and len(variables) >= 2:
+        pfig = plotly_scatter(df, variables[0], variables[1])
+    elif method in ("independent_ttest", "welch_ttest", "mannwhitney", "anova", "kruskal") and len(variables) >= 2:
+        pfig = plotly_box(df, variables[0], variables[1])
+    elif method == "chi2" and len(variables) >= 2:
+        pfig = plotly_bar(df, variables[0], variables[1])
+    if pfig is not None:
+        st.plotly_chart(pfig, use_container_width=True)
 
 
 def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
@@ -181,10 +197,10 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
         st.bar_chart(chart_df.T.rename(columns={0: "缺失率"}))
 
     numeric_cols = [c.name for c in report.columns if c.type == "numeric"]
-    heatmap = correlation_heatmap(df, numeric_cols)
+    heatmap = plotly_heatmap(df, numeric_cols)
     if heatmap is not None:
         st.subheader("数值字段相关矩阵")
-        st.pyplot(heatmap)
+        st.plotly_chart(heatmap, use_container_width=True)
 
     st.download_button(
         "下载画像报告（JSON）",
@@ -546,13 +562,22 @@ def render_reports() -> None:
         return
     meta = next(i for i in items if i["name"] == pick)
     st.caption(f"修改于 {meta['modified']} · {meta['size_bytes']:,} 字符")
-    dl_md, dl_html = st.columns(2)
+    dl_md, dl_html, dl_zip = st.columns(3)
     dl_md.download_button(
         "下载 .md", detail["markdown"], file_name=f"{pick}.md", mime="text/markdown", key="reports_dl_md"
     )
     if detail["html"]:
         dl_html.download_button(
             "下载 .html", detail["html"], file_name=f"{pick}.html", mime="text/html", key="reports_dl_html"
+        )
+    bundle_bytes = export_bundle(pick)
+    if bundle_bytes:
+        dl_zip.download_button(
+            "下载研究包 (.zip)",
+            data=bundle_bytes,
+            file_name=f"{pick}_bundle.zip",
+            mime="application/zip",
+            key="reports_dl_zip",
         )
     with st.expander("报告预览", expanded=True):
         st.markdown(detail["markdown"])
