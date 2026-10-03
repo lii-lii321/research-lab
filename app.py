@@ -1,4 +1,4 @@
-"""AI Data Research Lab — Streamlit 前端（分析流程 / ML 实验室 / 实验追踪）。"""
+﻿"""AI Data Research Lab — Streamlit 前端（分析流程 / ML 实验室 / 实验追踪）。"""
 from __future__ import annotations
 
 import json
@@ -19,7 +19,8 @@ from services.report_images import collect_profile_images
 from services.reports_store import get_report, list_reports, save_report
 from services.repro import build_repro_script
 from services.research_questions import generate_research_questions_auto
-from services.tracking import TrackingStore
+from services.tracking import TrackingStore, dataframe_fingerprint
+from ui.errors import show_error_card
 from utils.charts import correlation_heatmap, result_figure
 from utils.io import read_tabular
 
@@ -41,6 +42,11 @@ LEVEL_ICON = {"critical": "🔴", "warning": "🟡", "info": "🔵"}
 TASK_CN = {"regression": "回归", "classification": "分类", "clustering": "聚类"}
 
 
+@st.cache_data(hash_funcs={pd.DataFrame: lambda df: dataframe_fingerprint(df)}, show_spinner="正在生成数据画像…")
+def cached_profile(df: pd.DataFrame) -> ProfileReport:
+    return profile_dataset(df)
+
+
 def load_source() -> tuple[pd.DataFrame | None, str | None]:
     with st.sidebar:
         st.header("数据源")
@@ -53,13 +59,19 @@ def load_source() -> tuple[pd.DataFrame | None, str | None]:
             except ValueError as exc:
                 return None, str(exc)
         if use_sample:
-            if not SAMPLE_PATH.exists():
-                return None, "示例数据不存在：先运行 scripts/generate_sample.py"
+            st.session_state["dataset_name"] = SAMPLE_PATH.name
+            # 运行时自愈：示例文件缺失则内存现生成（新克隆零步骤可用）
+            if SAMPLE_PATH.exists():
+                try:
+                    return read_tabular(SAMPLE_PATH.name, SAMPLE_PATH.read_bytes()), None
+                except ValueError as exc:
+                    return None, str(exc)
             try:
-                st.session_state["dataset_name"] = SAMPLE_PATH.name
-                return read_tabular(SAMPLE_PATH.name, SAMPLE_PATH.read_bytes()), None
-            except ValueError as exc:
-                return None, str(exc)
+                from utils.sample_data import build_sample_dataframe
+
+                return build_sample_dataframe(), None
+            except Exception as exc:  # 自愈也失败才报错
+                return None, f"示例数据生成失败：{exc}"
     return None, None
 
 
@@ -168,7 +180,7 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
                 for key in ("plan", "result", "history", "report"):
                     st.session_state.pop(key, None)
             except (LLMError, ValueError) as exc:
-                st.error(f"生成失败：{exc}")
+                show_error_card(str(exc))
     rqs = st.session_state.get("rqs") or []
     rq = None
     if rqs:
@@ -187,7 +199,7 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
                 try:
                     st.session_state["plan"] = generate_experiment_plan(rq, report, client)
                 except (LLMError, ValueError) as exc:
-                    st.error(f"生成失败：{exc}")
+                    show_error_card(str(exc))
         plan = st.session_state.get("plan")
         if plan and plan.question_id == rq.id:
             source_cn = "LLM 设计" if plan.source == "llm" else "规则生成"
@@ -229,7 +241,7 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
                             history.append(ExperimentRecord(plan=plan, result=new_result))
                             st.session_state["history"] = history
                     except ValueError as exc:
-                        st.error(f"执行失败：{exc}")
+                        show_error_card(str(exc))
                         st.session_state.pop("result", None)
             result = st.session_state.get("result")
             if result and result.experiment_id == plan.experiment_id:
@@ -351,7 +363,7 @@ def render_ml_lab(df: pd.DataFrame, report: ProfileReport) -> None:
                     persist_dir="data/models",
                 )
             except ValueError as exc:
-                st.error(f"无法运行：{exc}")
+                show_error_card(str(exc))
                 st.session_state.pop("ml_result", None)
     result: MLExperimentResult | None = st.session_state.get("ml_result")
     if result is None:
@@ -537,7 +549,7 @@ def render_agent(df: pd.DataFrame, report: ProfileReport) -> None:
     if result is None:
         return
     if result.status != "ok":
-        st.error(f"自动研究未完成：{result.reason}")
+        show_error_card(result.reason)
     else:
         ml_desc = "—"
         if result.ml_result and result.ml_result.status == "ok":
@@ -564,17 +576,27 @@ def main() -> None:
     st.title("AI Data Research Lab")
     st.caption("从一份 CSV 到一份可复现的研究报告 —— 所有数字来自真实执行的代码")
 
+    if not st.session_state.get("seen_intro"):
+        with st.container(border=True):
+            st.markdown(
+                "**三步上手**：① 左侧选数据（示例已就绪）→ ② 一键生成研究问题 → ③ 产出可复现报告。"
+                "也可以点侧边栏「🚀 一键体验完整流程」直接看结果。"
+            )
+            if st.button("知道了", key="intro_ok"):
+                st.session_state["seen_intro"] = True
+                st.rerun()
+
     df, err = load_source()
     if err:
-        st.error(err)
+        show_error_card(err)
     if df is None:
         st.info("在左侧上传 CSV / Excel，或勾选示例数据开始。")
         st.stop()
 
     try:
-        report = profile_dataset(df)
+        report = cached_profile(df)
     except ValueError as exc:
-        st.error(f"无法生成画像：{exc}")
+        show_error_card(str(exc))
         st.stop()
 
     data_sig = (report.dataset.n_rows, report.dataset.n_cols, report.dataset.missing_cells)
@@ -629,3 +651,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

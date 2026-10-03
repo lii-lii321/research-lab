@@ -1,12 +1,12 @@
+"""Streamlit AppTest 界面级冒烟：真实渲染页面并点击关键流程。
+
+示例数据由 app 运行时自愈生成（S1.1），因此这些测试在任何全新检出上都应通过。
+"""
 from pathlib import Path
 
-import pytest
 from streamlit.testing.v1 import AppTest
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE = ROOT / "data" / "samples" / "student_performance.csv"
-
-pytestmark = pytest.mark.skipif(not SAMPLE.exists(), reason="示例数据未生成")
 
 
 def make_app() -> AppTest:
@@ -51,3 +51,13 @@ def test_app_agent_flow(tmp_path, monkeypatch):
     assert result.status == "ok"
     assert result.questions
     assert "AI 数据科学研究报告" in result.report_markdown
+
+
+def test_intro_card_dismissed_after_click():
+    at = make_app()
+    at.run()
+    assert not at.exception
+    if at.button(key="intro_ok"):
+        at.button(key="intro_ok").click()
+        at.run()
+        assert not at.exception

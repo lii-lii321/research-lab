@@ -68,6 +68,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     saved = save_report(args.name or f"{result.filename_base}_cli", result.report_markdown, result.report_html)
     print(f"报告已沉淀：{saved['md_path']}")
     print(f"            {saved['html_path']}")
+    print("下一步：python cli.py reports 查看全部报告；python cli.py experiments 回看实验")
     return 0
 
 
@@ -104,6 +105,7 @@ def cmd_reports(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="research-lab", description="AI Data Research Lab 命令行")
+    parser.add_argument("--version", action="version", version="research-lab 1.1.0")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_profile = sub.add_parser("profile", help="数据画像摘要")
