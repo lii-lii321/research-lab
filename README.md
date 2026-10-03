@@ -97,6 +97,7 @@ copy .env.example .env    # 填入 AI_API_KEY（SiliconFlow / 智谱 / DeepSeek 
 
 - 为什么不做"LLM 生成代码 + 沙箱"？见 [ADR-0001](docs/adr-0001-method-whitelist-over-codegen-sandbox.md)
 - 系统提升方案与逐条落实手册（A–H 八主题、文件级改动清单、机器可判定验收标准）见 [docs/IMPROVEMENT_MANUAL.md](docs/IMPROVEMENT_MANUAL.md)
+- 使用体验提升方案（S0–S8 九主题：首启/等待/图表/报告/数据接入/错误/会话，含北极星指标）见 [docs/UX_MANUAL.md](docs/UX_MANUAL.md)
 - 论文复现专栏：[reproductions/](reproductions/)（第一篇：Student 1908 配对 t 检验）
 - 三阶段路线与反范围承诺见 [PROJECT_BRIEF.md](PROJECT_BRIEF.md)，版本历史见 [CHANGELOG.md](CHANGELOG.md)
 
