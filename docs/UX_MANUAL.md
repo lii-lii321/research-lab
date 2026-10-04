@@ -255,7 +255,7 @@ HTML 报告已是自包含单文件 → PDF 用 `weasyprint`（纯 Python，Wind
 
 ## 附：UX 落实清单
 
-- [ ] S0 app.py 拆分多页面（UX 前置重构）
+- [x] S0 app.py 拆分多页面（UX 前置重构）
 - [x] S1.1 示例数据运行时自愈
 - [ ] S1.2 scripts/doctor.py 环境体检
 - [x] S1.3 首次引导卡
@@ -279,6 +279,7 @@ HTML 报告已是自包含单文件 → PDF 用 `weasyprint`（纯 Python，Wind
 - [ ] S8 i18n 与可达性（远期）
 
 > 完成 S1.1/S2.1/S6.1 即可宣布达成北极星指标的 TTFV ≤ 2 分钟与失败可恢复 100%——这是 UX 1.1 周的验收口径。
+
 
 
 

@@ -1,5 +1,16 @@
 ﻿# Changelog
 
+## 1.5.0 - 2026-10-04
+
+落实 UX 手册 S0 多页面架构重构：
+
+- app.py 从 700+ 行拆为纯导航入口（st.navigation + st.Page），五个页面文件在 pages/ 下独立维护
+- 共享组件（时间线/下载卡/字段表/结果图）抽离到 ui/components.py，数据加载与画像缓存抽离到 ui/page_state.py
+- AppTest 逐页面测试（7 用例：导航渲染/流程/ML/追踪/报告/Agent/引导卡），不再需要切 tab
+- 193 测试全绿，ruff+mypy 零错误
+
+## 1.4.0 - 2026-10-04
+
 ## 1.4.0 - 2026-10-04
 
 落实 UX 手册 S3.1/S4.1/S6.1 收尾：
@@ -176,6 +187,7 @@
 
 - 项目启动：Dataset Profiler（类型推断 / 缺失重复 / 离群 / 高相关 / 类别不平衡 / 目标候选）
 - FastAPI + Streamlit 双入口，pytest 测试与冒烟脚本
+
 
 
 
