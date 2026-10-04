@@ -17,10 +17,12 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from pathlib import Path
+
 from services.agent import run_research_agent  # noqa: E402
 from services.llm import get_llm_client  # noqa: E402
 from services.profiler import profile_dataset  # noqa: E402
-from services.reports_store import get_report, list_reports, save_report  # noqa: E402
+from services.reports_store import export_bundle, get_report, list_reports, save_report  # noqa: F401
 from services.tracking import TrackingStore  # noqa: E402
 from utils.io import read_tabular  # noqa: E402
 
@@ -92,6 +94,17 @@ def cmd_reports(args: argparse.Namespace) -> int:
         if detail is None:
             print(f"报告不存在：{args.name}")
             return 1
+        if args.export:
+            from services.reports_store import export_bundle
+
+            bundle = export_bundle(args.name)
+            if bundle is None:
+                print(f"打包失败：{args.name}")
+                return 1
+            out = Path(f"{args.name}_bundle.zip")
+            out.write_bytes(bundle)
+            print(f"研究包已导出：{out}（{len(bundle):,} 字节）")
+            return 0
         print(detail["markdown"])
         return 0
     items = list_reports()
@@ -125,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_reports = sub.add_parser("reports", help="列出或查看报告")
     p_reports.add_argument("name", nargs="?", default="", help="报告名（省略则列出全部）")
+    p_reports.add_argument("--export", action="store_true", help="导出为 zip 研究包（需 --name）")
 
     args = parser.parse_args(argv)
     handlers = {

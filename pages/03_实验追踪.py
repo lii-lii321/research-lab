@@ -70,7 +70,7 @@ def render_tracking() -> None:
                 },
                 index=[t.created_at for t in same],
             )
-            st.subheader("同数据集同任务 · 最佳指标趋势")
+            st.subheader(f"同数据集 {row.dataset_name} 同任务 {row.task} · 最佳指标趋势（{len(same)} 次）")
             st.line_chart(trend)
 
 main()

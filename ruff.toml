@@ -10,3 +10,5 @@ select = ["E", "F", "W", "I", "UP", "B"]
 "scripts/*" = ["E402", "B904", "E501"]
 "examples/*" = ["E402"]
 "services/tracking.py" = ["E501"]
+# CLI 需要先设 sys.path 再导入项目模块
+"cli.py" = ["E402"]
