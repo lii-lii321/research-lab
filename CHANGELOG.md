@@ -1,5 +1,15 @@
 ﻿# Changelog
 
+## 1.6.0 - 2026-10-04
+
+落实 UX 手册 S6.2/S4.2 收尾：
+
+- RFC 7807 安全实现：APIError 异常类 + install_problem_handler，仅对显式业务错误生效，不影响 FastAPI 默认 HTTPException；测试覆盖 problem+json 响应与正常端点不受影响
+- PDF 导出：fpdf2 纯 Python 实现（weasyprint 需 GTK 原生库在 Windows 不可用，按手册预案降级），支持中文字体/标题层级/表格降级渲染
+- 195 测试全绿
+
+## 1.5.0 - 2026-10-04
+
 ## 1.5.0 - 2026-10-04
 
 落实 UX 手册 S0 多页面架构重构：
@@ -187,6 +197,7 @@
 
 - 项目启动：Dataset Profiler（类型推断 / 缺失重复 / 离群 / 高相关 / 类别不平衡 / 目标候选）
 - FastAPI + Streamlit 双入口，pytest 测试与冒烟脚本
+
 
 
 

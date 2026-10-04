@@ -265,13 +265,13 @@ HTML 报告已是自包含单文件 → PDF 用 `weasyprint`（纯 Python，Wind
 - [x] S3.1 plotly 交互图（requirements 已加，UI 逐步替换中）
 - [ ] S3.2 统计注解上图
 - [x] S4.1 研究包 zip 导出
-- [ ] S4.2 PDF 导出
+- [x] S4.2 PDF 导出（fpdf2 方案）
 - [ ] S4.3 报告对比（可选）
 - [x] S5.1 粘贴数据
 - [x] S5.2 数据集画廊
 - [ ] S5.3 URL 拉取（默认关）
 - [x] S6.1 人话错误卡（七类映射）
-- [ ] S6.2 RFC 7807 错误标准化
+- [x] S6.2 RFC 7807 错误标准化（APIError 作用域）
 - [x] S6.3 统计前提检查卡
 - [x] S6.4 CLI --version/下一步指引（彩色待 ANSI 引入库）
 - [x] S7.1 刷新恢复
@@ -279,6 +279,7 @@ HTML 报告已是自包含单文件 → PDF 用 `weasyprint`（纯 Python，Wind
 - [ ] S8 i18n 与可达性（远期）
 
 > 完成 S1.1/S2.1/S6.1 即可宣布达成北极星指标的 TTFV ≤ 2 分钟与失败可恢复 100%——这是 UX 1.1 周的验收口径。
+
 
 
 
