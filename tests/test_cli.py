@@ -1,4 +1,6 @@
 ﻿"""命令行入口测试：直接调用 cli.main，不经过子进程。"""
+from pathlib import Path
+
 import pytest
 
 from cli import main
@@ -111,6 +113,9 @@ def test_reports_export_failure_exit_code(csv_file, capsys, isolated_dirs, monke
 
 
 def test_reports_pdf_export(csv_file, capsys, isolated_dirs, tmp_path, monkeypatch):
+    """仅在有中文字体的 Windows 上验证；CI Linux 跳过。"""
+    if not Path("C:/Windows/Fonts/msyh.ttc").exists():
+        pytest.skip("需要 Windows 中文字体")
     monkeypatch.chdir(tmp_path)
     main(["analyze", csv_file, "--skip-ml", "--no-literature", "--name", "pdf1"])
     capsys.readouterr()

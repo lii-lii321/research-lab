@@ -1,9 +1,12 @@
 """报告库：保存 / 列表 / 取回 / 名称净化 / 同名冲突 / 导出。"""
 import io
+import os
 import threading
 import zipfile
 from datetime import datetime
 from pathlib import Path
+
+import pytest
 
 from services.reports_store import (
     export_bundle,
@@ -126,7 +129,10 @@ def test_export_bundle_omits_empty_html(tmp_path):
 
 
 def test_export_pdf_renders_bytes_and_missing_returns_none(tmp_path):
-    # Windows 依赖系统中文字体（msyh/simhei）；fpdf2 为现有依赖
+    """仅在有中文字体的系统上验证渲染；CI Linux 跳过。"""
+
+    if os.name != "nt" or not Path("C:/Windows/Fonts/msyh.ttc").exists():
+        pytest.skip("需要 Windows 中文字体")
     save_report("pdfdoc", "# 标题\n\n正文段落", "<html/>", base=tmp_path)
     pdf = export_pdf("pdfdoc", base=tmp_path)
     assert pdf is not None

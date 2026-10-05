@@ -1,8 +1,9 @@
-.venv/
+﻿.venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
 data/samples/
 data/tracking/
+data/models/
 data/reports/
 .env
