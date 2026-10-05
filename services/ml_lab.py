@@ -244,7 +244,8 @@ def _supervised_metrics(
         "Recall_macro": round(float(recall_score(y_test, pred, average="macro", zero_division=0)), 4),
         "F1_macro": round(float(f1_score(y_test, pred, average="macro", zero_division=0)), 4),
     }
-    if n_classes == 2 and proba is not None:
+    # 测试集仅一个类别时 ROC AUC 无定义（sklearn 会告警并给出误导性 0.5），跳过
+    if n_classes == 2 and proba is not None and y_test.nunique() >= 2:
         metrics["ROC_AUC"] = round(float(roc_auc_score(y_test, proba)), 4)
     return metrics
 
@@ -315,6 +316,8 @@ def _run_supervised(
     X_train, X_test, y_train, y_test = train_test_split(
         X_df, y_model, test_size=TEST_SIZE, random_state=SEED, stratify=stratify_arg
     )
+    if task == "classification" and y_train.nunique() < 2:
+        raise DataProblem("训练集中仅剩一个类别（稀有类别样本全部落入测试集），无法训练分类器")
     cv_k = 5 if len(X_train) >= 100 else 3
     if task == "classification":
         cv_k = min(cv_k, int(y_train.value_counts().min()))
@@ -361,6 +364,8 @@ def _run_supervised(
         tuning_note = "线性模型无超参数，跳过调优"
     elif len(X_train) < 50:
         tuning_note = "训练样本不足 50，跳过调优"
+    elif not use_cv:
+        tuning_note = "类别过稀疏，跳过调优"
     else:
         from sklearn.model_selection import GridSearchCV
 
@@ -397,6 +402,8 @@ def _run_supervised(
             tuning_note = f"调优未见提升（{tuned_cv:.4f} < 基线 {base_cv:.4f}），保留基线参数"
 
     best_pipeline = tuned_pipeline if tuned_pipeline is not None else fitted_pipelines.get(best_result.model)
+    if task == "classification" and n_classes == 2 and y_test.nunique() < 2:
+        tuning_note = (f"{tuning_note}；" if tuning_note else "") + "测试集仅含一个类别，跳过 ROC AUC"
     return {
         "results": results,
         "n_train": int(len(X_train)),
@@ -530,25 +537,34 @@ def run_ml_experiment(
     )
     if store is not None:
         notes = "；".join(f"{e.column}: {e.reason}" for e in excluded)[:500]
-        result.tracked_uid = store.track(
-            kind="ml",
-            task=task,
-            target=target,
-            dataset_name=dataset_name,
-            df=df,
-            feature_set={
-                "numeric": numeric,
-                "categorical": categorical,
-                "n_clusters": k,
-            },
-            models_results=[m.model_dump() for m in models],
-            best_model=result.best_model,
-            best_metric_name=best_metric_name,
-            best_metric_value=result.best_metric_value,
-            notes=notes,
-            runtime_seconds=result.runtime_seconds,
-        )
-        if persist_dir is not None and task != "clustering" and bundle is not None and bundle["pipeline"] is not None:
+        try:
+            result.tracked_uid = store.track(
+                kind="ml",
+                task=task,
+                target=target,
+                dataset_name=dataset_name,
+                df=df,
+                feature_set={
+                    "numeric": numeric,
+                    "categorical": categorical,
+                    "n_clusters": k,
+                },
+                models_results=[m.model_dump() for m in models],
+                best_model=result.best_model,
+                best_metric_name=best_metric_name,
+                best_metric_value=result.best_metric_value,
+                notes=notes,
+                runtime_seconds=result.runtime_seconds,
+            )
+        except Exception:
+            pass  # 追踪失败绝不影响实验结果本身（与 executor.py 同一原则）
+        if (
+            persist_dir is not None
+            and result.tracked_uid
+            and task != "clustering"
+            and bundle is not None
+            and bundle["pipeline"] is not None
+        ):
             try:
                 import joblib
 

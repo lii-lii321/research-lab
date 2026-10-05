@@ -91,7 +91,7 @@ copy .env.example .env    # 填入 AI_API_KEY（SiliconFlow / 智谱 / DeepSeek 
 
 ## API
 
-`POST /api/profile` · `POST /api/research-questions` · `POST /api/experiment-plan` · `POST /api/execute-experiment` · `POST /api/report` · `POST /api/ml-experiment` · `GET /api/experiments` · `GET /api/experiments/{uid}` · `POST /api/agent/run`
+`POST /api/profile` · `POST /api/research-questions` · `POST /api/experiment-plan` · `POST /api/execute-experiment` · `POST /api/report` · `POST /api/ml-experiment` · `GET /api/experiments` · `GET /api/experiments/{uid}` · `GET /api/reports` · `GET /api/reports/{name}` · `POST /api/agent/run`
 
 ## 设计决策与路线
 
@@ -103,7 +103,7 @@ copy .env.example .env    # 填入 AI_API_KEY（SiliconFlow / 智谱 / DeepSeek 
 
 ## 测试与质量
 
-pytest 176 用例（含 Streamlit AppTest 界面级冒烟）进 CI，每次推送运行；
+pytest 219 用例（含 Streamlit AppTest 界面级冒烟）进 CI，每次推送运行；
 覆盖率、ruff、mypy 由 CI 门禁强制（覆盖率阈值 85%）。
 `scripts/smoke_check.py` 对真实启动的 API 与 UI 做九项端到端探活（含真实 arXiv 检索）。
 

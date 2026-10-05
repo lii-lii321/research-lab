@@ -84,3 +84,39 @@ def test_analyze_missing_file_exits(csv_file, isolated_dirs):
     with pytest.raises(SystemExit):
         main(["analyze", str(csv_file) + ".missing"])
 
+
+def test_reports_export_produces_zip(csv_file, capsys, isolated_dirs, tmp_path, monkeypatch):
+    import zipfile
+
+    monkeypatch.chdir(tmp_path)  # 导出文件写到当前目录，挪进 tmp 防污染仓库
+    main(["analyze", csv_file, "--skip-ml", "--no-literature", "--name", "exp1"])
+    capsys.readouterr()
+    assert main(["reports", "exp1", "--export"]) == 0
+    assert "研究包已导出" in capsys.readouterr().out
+    zip_path = tmp_path / "exp1_bundle.zip"
+    assert zip_path.exists()
+    with zipfile.ZipFile(zip_path) as zf:
+        assert "exp1.md" in zf.namelist()
+        assert "MANIFEST.txt" in zf.namelist()
+
+
+def test_reports_export_failure_exit_code(csv_file, capsys, isolated_dirs, monkeypatch):
+    import services.reports_store as rs
+
+    main(["analyze", csv_file, "--skip-ml", "--no-literature", "--name", "exp2"])
+    capsys.readouterr()
+    monkeypatch.setattr(rs, "export_bundle", lambda *a, **k: None)
+    assert main(["reports", "exp2", "--export"]) == 1
+    assert "打包失败" in capsys.readouterr().out
+
+
+def test_reports_pdf_export(csv_file, capsys, isolated_dirs, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    main(["analyze", csv_file, "--skip-ml", "--no-literature", "--name", "pdf1"])
+    capsys.readouterr()
+    assert main(["reports", "pdf1", "--pdf"]) == 0
+    assert "PDF 已导出" in capsys.readouterr().out
+    pdf_file = tmp_path / "pdf1.pdf"
+    assert pdf_file.exists()
+    assert pdf_file.read_bytes()[:5] == b"%PDF-"
+

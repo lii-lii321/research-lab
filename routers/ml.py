@@ -7,6 +7,7 @@ from models.schemas import MLExperimentResult, TrackedExperiment
 from routers.deps import get_tracking_store
 from services.ml_lab import TASKS, run_ml_experiment
 from services.tracking import TrackingStore
+from utils.problem import APIError
 from utils.uploads import load_dataset
 
 router = APIRouter(prefix="/api", tags=["ml"])
@@ -24,10 +25,12 @@ async def ml_experiment(
         raise HTTPException(status_code=422, detail=f"未知任务类型：{task}（可选 {' / '.join(TASKS)}）")
     df, profile = await load_dataset(file)
     name = dataset_name.strip() or file.filename or "dataset"
-    result = await run_in_threadpool(
-        run_ml_experiment, df, profile, target.strip() or None, task, store, name
-    )
-    return result
+    try:
+        return await run_in_threadpool(
+            run_ml_experiment, df, profile, target.strip() or None, task, store, name
+        )
+    except ValueError as exc:
+        raise APIError(422, "实验无法执行", str(exc)) from exc
 
 
 @router.get("/experiments", response_model=list[TrackedExperiment])

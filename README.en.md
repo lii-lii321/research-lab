@@ -100,8 +100,8 @@ python cli.py reports                                            # revisit repor
 
 ## Tests & quality
 
-176 pytest cases (including Streamlit AppTest UI smoke tests), 94% coverage on
-services with an 85% CI gate, plus ruff and mypy gates — every push runs all
+219 pytest cases (including Streamlit AppTest UI smoke tests) with an 85%
+coverage CI gate, plus ruff and mypy gates — every push runs all
 of them. `scripts/smoke_check.py` performs nine live end-to-end probes against
 real servers (including a live arXiv retrieval).
 

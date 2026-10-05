@@ -340,3 +340,47 @@ def test_kruskal_all_identical_returns_failed_not_crash():
     assert result.status == "failed"
     assert "无法计算" in result.reason
     assert result.interpretation == result.reason
+
+
+def test_two_group_with_nan_group_labels_runs_on_real_groups():
+    # 分组列含 NaN：先剔除缺标签行，two-group 方法按真实组数执行而非误报 3 组
+    rng = np.random.default_rng(15)
+    df = pd.DataFrame(
+        {
+            "g": ["A"] * 40 + ["B"] * 40 + [None] * 3,
+            "v": np.concatenate(
+                [rng.normal(50, 5, 40), rng.normal(70, 5, 40), [1.0, 2.0, 3.0]]
+            ),
+        }
+    )
+    result = run_experiment(make_plan("welch_ttest", ["g", "v"]), df)
+    assert result.status == "ok"
+    assert [g.group for g in result.groups] == ["A", "B"]
+    assert result.n_used == 80
+    assert result.n_dropped == 3
+
+
+def test_two_group_with_single_real_group_fails_with_true_count():
+    # 剔除 NaN 标签后只剩 1 组：two-group 方法按真实组数报错，而非把 "None" 计入
+    df = pd.DataFrame({"g": ["A"] * 10 + [None] * 5, "v": np.arange(15.0)})
+    result = run_experiment(make_plan("independent_ttest", ["g", "v"]), df)
+    assert result.status == "failed"
+    assert "检测到 1 组" in result.reason
+    assert "None" not in result.reason
+
+
+def test_anova_nan_group_labels_no_ghost_group():
+    # anova：剔除分组列 NaN 行，结果不含 "None" 幽灵组且 n_dropped 如实上报
+    rng = np.random.default_rng(16)
+    df = pd.DataFrame(
+        {
+            "g": np.repeat(["A", "B"], 30).tolist() + [None] * 2,
+            "v": np.concatenate([rng.normal(10, 2, 30), rng.normal(20, 2, 30), [99.0, -99.0]]),
+        }
+    )
+    result = run_experiment(make_plan("anova", ["g", "v"]), df)
+    assert result.status == "ok"
+    group_names = [g.group for g in result.groups]
+    assert "None" not in group_names
+    assert result.n_dropped == 2 and result.n_dropped > 0
+    assert "None" not in result.interpretation

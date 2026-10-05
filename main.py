@@ -10,8 +10,9 @@ from routers.profile import router as profile_router
 from routers.reports import router as reports_router
 from routers.research import router as research_router
 from utils.problem import install_problem_handler
+from utils.version import APP_VERSION
 
-app = FastAPI(title="AI Data Research Lab", version="1.8.0")
+app = FastAPI(title="AI Data Research Lab", version=APP_VERSION)
 install_problem_handler(app)
 
 # CORS 默认只放行本地 Streamlit，可用 RESEARCH_LAB_CORS 覆盖（逗号分隔）
@@ -35,7 +36,7 @@ app.include_router(reports_router)
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "ai-data-research-lab", "version": "1.8.0"}
+    return {"status": "ok", "service": "ai-data-research-lab", "version": APP_VERSION}
 
 
 

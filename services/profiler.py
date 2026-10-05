@@ -306,7 +306,7 @@ def _collect_warnings(
 
 
 def profile_dataset(df: pd.DataFrame, sample: bool = True) -> ProfileReport:
-    """数据画像；超过 SAMPLE_ROWS 行时默认均匀采样并在 overview.notes 标注。"""
+    """数据画像；超过 SAMPLE_ROWS 行时默认均匀采样并在 overview.sampled / overview.sample_note 标注。"""
     if df.shape[0] == 0 or df.shape[1] == 0:
         raise ValueError("数据集为空（0 行或 0 列），无法生成画像")
     sampled = False

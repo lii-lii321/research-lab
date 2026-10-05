@@ -274,6 +274,48 @@ def test_ml_experiment_bad_task(override_llm):
     assert "未知任务" in resp.json()["detail"]
 
 
+def test_ml_experiment_bad_target_returns_problem_json(override_llm):
+    override_llm(None)
+    resp = client.post(
+        "/api/ml-experiment",
+        files={"file": ("t.csv", CSV, "text/csv")},
+        data={"target": "ghost", "task": "auto"},
+    )
+    assert resp.status_code == 422
+    assert resp.headers["content-type"].startswith("application/problem+json")
+    body = resp.json()
+    assert body["status"] == 422
+    assert body["instance"] == "/api/ml-experiment"
+    assert "不在数据集中" in body["detail"]
+
+
+def test_report_detail_missing_returns_problem_json():
+    resp = client.get("/api/reports/no-such-report")
+    assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("application/problem+json")
+    body = resp.json()
+    assert body["status"] == 404
+    assert "不存在" in body["detail"]
+
+
+def test_reports_listing_sorted_by_mtime_desc(tmp_path, monkeypatch):
+    import os
+
+    from services.reports_store import save_report
+
+    monkeypatch.setenv("RESEARCH_LAB_REPORTS_DIR", str(tmp_path / "reports"))
+    save_report("first", "1", "1")
+    save_report("second", "2", "2")
+    os.utime(tmp_path / "reports" / "first.md", (1000000000, 1000000000))  # first 置为过去
+    resp = client.get("/api/reports")
+    assert resp.status_code == 200
+    names = [i["name"] for i in resp.json()]
+    assert names == ["second", "first"]  # mtime 降序契约
+    detail = client.get("/api/reports/second")
+    assert detail.status_code == 200
+    assert detail.json()["markdown"] == "2"
+
+
 def test_agent_run_rule_mode(override_llm, tmp_path):
     from routers.deps import get_tracking_store
     from services.tracking import TrackingStore

@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from services.reports_store import get_report, list_reports
+from utils.problem import APIError
 
 router = APIRouter(prefix="/api", tags=["reports"])
 
@@ -14,5 +15,5 @@ def reports() -> list[dict]:
 def report_detail(name: str) -> dict:
     detail = get_report(name)
     if detail is None:
-        raise HTTPException(status_code=404, detail=f"报告 {name} 不存在")
+        raise APIError(404, "报告不存在", f"报告 {name} 不存在")
     return detail

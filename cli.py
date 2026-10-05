@@ -6,6 +6,7 @@
                         [--skip-ml] [--no-literature] [--no-llm] [--name NAME]
   python cli.py experiments [--limit N]
   python cli.py reports
+  python cli.py reports <name> [--export] [--pdf]
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from services.profiler import profile_dataset  # noqa: E402
 from services.reports_store import export_bundle, get_report, list_reports, save_report  # noqa: F401
 from services.tracking import TrackingStore  # noqa: E402
 from utils.io import read_tabular  # noqa: E402
+from utils.version import APP_VERSION  # noqa: E402
 
 
 def _load(file_path: str):
@@ -105,6 +107,17 @@ def cmd_reports(args: argparse.Namespace) -> int:
             out.write_bytes(bundle)
             print(f"研究包已导出：{out}（{len(bundle):,} 字节）")
             return 0
+        if args.pdf:
+            from services.reports_store import export_pdf
+
+            pdf_bytes = export_pdf(args.name)
+            if pdf_bytes is None:
+                print(f"PDF 导出失败：{args.name}")
+                return 1
+            out = Path(f"{args.name}.pdf")
+            out.write_bytes(pdf_bytes)
+            print(f"PDF 已导出：{out}（{len(pdf_bytes):,} 字节）")
+            return 0
         print(detail["markdown"])
         return 0
     items = list_reports()
@@ -118,7 +131,7 @@ def cmd_reports(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="research-lab", description="AI Data Research Lab 命令行")
-    parser.add_argument("--version", action="version", version="research-lab 1.1.0")
+    parser.add_argument("--version", action="version", version=f"research-lab {APP_VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_profile = sub.add_parser("profile", help="数据画像摘要")
@@ -139,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     p_reports = sub.add_parser("reports", help="列出或查看报告")
     p_reports.add_argument("name", nargs="?", default="", help="报告名（省略则列出全部）")
     p_reports.add_argument("--export", action="store_true", help="导出为 zip 研究包（需 --name）")
+    p_reports.add_argument("--pdf", action="store_true", help="导出为 PDF（需 --name，fpdf2 渲染）")
 
     args = parser.parse_args(argv)
     handlers = {

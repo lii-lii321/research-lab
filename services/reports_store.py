@@ -12,6 +12,8 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+from utils.version import APP_VERSION
+
 DEFAULT_DIR = Path("data/reports")
 _SAFE_NAME = re.compile(r"[^0-9A-Za-z_.\-一-龥]+")
 
@@ -35,7 +37,7 @@ def export_bundle(name: str, base: Path | str | None = None) -> bytes | None:
                     zf.write(f, f"assets/{f.name}")
         manifest = (
             f"报告：{stem}\n导出：{datetime.now().isoformat(timespec='seconds')}\n"
-            f"由 AI Data Research Lab v1.3.0 生成\n"
+            f"由 AI Data Research Lab v{APP_VERSION} 生成\n"
             f"包含：markdown + html + assets\n"
         )
         zf.writestr("MANIFEST.txt", manifest)
@@ -77,6 +79,7 @@ def export_pdf(name: str, base: Path | str | None = None) -> bytes | None:
             if not line:
                 pdf.ln(3)
                 continue
+            pdf.set_x(pdf.l_margin)  # fpdf2 multi_cell 后 x 停在行尾，连续行渲染前须复位
             if line.startswith("# "):
                 pdf.set_font(bold_font, style="B", size=16)
                 pdf.multi_cell(0, 8, line[2:])
@@ -130,16 +133,31 @@ def save_report(
     """保存一份报告（同名自动加时间戳后缀），返回 {name, md_path, html_path}。
 
     images 为 (文件名, PNG 字节) 列表，落盘到 assets/<报告名>/ 供 MD 相对引用。
+    候选名先独占创建 md 占位（O_CREAT|O_EXCL），冲突则换后缀重查——同秒或
+    并发保存互不覆盖，已存在的报告永不被静默顶掉。
     """
     directory = _dir(base)
     stem = sanitize_name(name_base)
-    md_path = directory / f"{stem}.md"
-    html_path = directory / f"{stem}.html"
-    if md_path.exists() or html_path.exists():
-        stem = f"{stem}_{datetime.now().strftime('%H%M%S')}"
-        md_path = directory / f"{stem}.md"
-        html_path = directory / f"{stem}.html"
-    md_path.write_text(markdown, encoding="utf-8")
+    md_fd = None
+    attempt = 0
+    while md_fd is None:
+        candidate = (
+            stem
+            if attempt == 0
+            else f"{stem}_{datetime.now().strftime('%H%M%S')}"
+            + (f"_{attempt}" if attempt > 1 else "")
+        )
+        md_path = directory / f"{candidate}.md"
+        html_path = directory / f"{candidate}.html"
+        if not html_path.exists():
+            try:
+                md_fd = os.open(md_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                pass
+        attempt += 1
+    stem = candidate
+    with os.fdopen(md_fd, "w", encoding="utf-8") as f:
+        f.write(markdown)
     html_path.write_text(html, encoding="utf-8")
     if images:
         assets = directory / "assets" / stem
@@ -151,10 +169,16 @@ def save_report(
 
 def list_reports(base: Path | str | None = None) -> list[dict]:
     directory = _dir(base)
+    entries: list[tuple[Path, os.stat_result]] = []
+    for md_path in directory.glob("*.md"):
+        try:
+            entries.append((md_path, md_path.stat()))
+        except FileNotFoundError:
+            continue  # 遍历间隙被并发删除，跳过该条
+    entries.sort(key=lambda t: t[1].st_mtime, reverse=True)
     items: list[dict] = []
-    for md_path in sorted(directory.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True):
+    for md_path, stat in entries:
         html_path = md_path.with_suffix(".html")
-        stat = md_path.stat()
         items.append(
             {
                 "name": md_path.stem,

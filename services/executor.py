@@ -87,10 +87,12 @@ def _numeric_pair(df: pd.DataFrame, x: str, y: str) -> tuple[np.ndarray, np.ndar
 
 
 def _group_arrays(df: pd.DataFrame, group_col: str, outcome_col: str):
+    # 先剔除分组列缺失行再转字符串，避免 NaN 被转成 "None" 幽灵组
+    valid = df[group_col].notna()
     frame = pd.DataFrame(
         {
-            "g": df[group_col].astype(str),
-            "v": pd.to_numeric(df[outcome_col], errors="coerce"),
+            "g": df.loc[valid, group_col].astype(str),
+            "v": pd.to_numeric(df.loc[valid, outcome_col], errors="coerce"),
         }
     ).dropna()
     grouped: dict[str, np.ndarray] = {}

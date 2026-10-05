@@ -187,3 +187,63 @@ def test_tracking_via_store(tmp_path):
     assert detail["dataset_name"] == "t.csv"
     assert isinstance(detail["models_results"], list)
     assert detail["models_results"][0]["model"]
+
+
+def build_singleton_df(pos: int, n: int = 100) -> pd.DataFrame:
+    """99 'no' + 1 'yes'：单例放在 pos 行，位置决定它落训练集还是测试集。"""
+    rng = np.random.default_rng(7)
+    labels = ["no"] * n
+    labels[pos] = "yes"
+    return pd.DataFrame(
+        {"f1": rng.normal(0, 1, n), "f2": rng.normal(0, 1, n), "label": labels}
+    )
+
+
+def _singleton_lands(pos: int) -> str:
+    # run_ml_experiment 固定 random_state=SEED 且 counts.min()==1 时不分层，
+    # 切分落点只取决于行索引，可离线复算
+    from sklearn.model_selection import train_test_split
+
+    from services.ml_lab import SEED, TEST_SIZE
+
+    y = build_singleton_df(pos)["label"]
+    idx = np.arange(len(y)).reshape(-1, 1)
+    _, _, _, y_te = train_test_split(idx, y, test_size=TEST_SIZE, random_state=SEED)
+    return "test" if (y_te == "yes").any() else "train"
+
+
+def test_rare_singleton_in_train_degrades_cleanly():
+    # 单例落训练集：cv_k=1 → 跳过调优；y_test 单类 → 跳过 ROC AUC；全程不崩
+    pos = next(p for p in range(100) if _singleton_lands(p) == "train")
+    df = build_singleton_df(pos)
+    profile = profile_dataset(df)
+    result = run_ml_experiment(df, profile, target="label", task="classification")
+    assert result.status == "ok"
+    assert "类别过稀疏，跳过调优" in result.tuning_note
+    assert all("ROC_AUC" not in m.metrics for m in result.models)
+    assert "跳过 ROC AUC" in result.tuning_note
+
+
+def test_rare_singleton_in_test_fails_with_reason():
+    # 单例落测试集：训练集只剩一个类别 → 结构化失败而非裸异常
+    pos = next(p for p in range(100) if _singleton_lands(p) == "test")
+    df = build_singleton_df(pos)
+    profile = profile_dataset(df)
+    result = run_ml_experiment(df, profile, target="label", task="classification")
+    assert result.status == "failed"
+    assert "训练集中仅剩一个类别" in result.reason
+
+
+def test_tracking_failure_does_not_break_experiment():
+    class BrokenStore:
+        def track(self, **kwargs):
+            raise RuntimeError("db locked")
+
+    df = build_classification_df()
+    profile = profile_dataset(df)
+    result = run_ml_experiment(
+        df, profile, target="label", task="classification",
+        store=BrokenStore(), dataset_name="x.csv",
+    )
+    assert result.status == "ok"
+    assert not result.tracked_uid
