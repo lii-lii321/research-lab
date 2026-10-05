@@ -261,7 +261,7 @@ HTML 报告已是自包含单文件 → PDF 用 `weasyprint`（纯 Python，Wind
 - [x] S1.3 首次引导卡
 - [x] S2.1 画像缓存（数据指纹哈希）
 - [x] S2.2 ML/Agent 分步进度（st.status + progress/on_step 回调）
-- [ ] S2.3 大文件采样画像
+- [x] S2.3 大文件采样画像
 - [x] S3.1 plotly 交互图（requirements 已加，UI 逐步替换中）
 - [ ] S3.2 统计注解上图
 - [x] S4.1 研究包 zip 导出
@@ -279,6 +279,7 @@ HTML 报告已是自包含单文件 → PDF 用 `weasyprint`（纯 Python，Wind
 - [ ] S8 i18n 与可达性（远期）
 
 > 完成 S1.1/S2.1/S6.1 即可宣布达成北极星指标的 TTFV ≤ 2 分钟与失败可恢复 100%——这是 UX 1.1 周的验收口径。
+
 
 
 

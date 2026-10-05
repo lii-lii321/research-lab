@@ -51,6 +51,8 @@ class DatasetOverview(BaseModel):
     duplicate_rate: float
     memory_mb: float
     type_counts: dict[str, int]
+    sampled: bool = False
+    sample_note: str = ""
 
 
 class WarningItem(BaseModel):

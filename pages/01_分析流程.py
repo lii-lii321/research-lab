@@ -56,6 +56,8 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
     m3.metric("总体缺失率", f"{d.missing_rate:.1%}")
     m4.metric("重复行", f"{d.duplicate_rows:,}")
     m5.metric("内存占用", f"{d.memory_mb:.2f} MB")
+    if d.sampled:
+        st.caption(f"⚡ {d.sample_note}——统计结论基于采样数据，ML 实验使用全量。")
 
     st.subheader("第一步 · 数据质量提示")
     if report.warnings:

@@ -36,6 +36,7 @@ IQR_K = 1.5
 TOP_VALUES_N = 5
 OUTLIER_PREVIEW_N = 10
 MAX_CORR_PAIRS = 10
+SAMPLE_ROWS = 500_000
 
 WARNING_SUGGESTIONS = {
     "DUPLICATE_ROWS": "先确认是否重复采集；确认后按业务键去重再分析。",
@@ -304,9 +305,14 @@ def _collect_warnings(
     return out
 
 
-def profile_dataset(df: pd.DataFrame) -> ProfileReport:
+def profile_dataset(df: pd.DataFrame, sample: bool = True) -> ProfileReport:
+    """数据画像；超过 SAMPLE_ROWS 行时默认均匀采样并在 overview.notes 标注。"""
     if df.shape[0] == 0 or df.shape[1] == 0:
         raise ValueError("数据集为空（0 行或 0 列），无法生成画像")
+    sampled = False
+    if sample and df.shape[0] > SAMPLE_ROWS:
+        df = df.sample(n=SAMPLE_ROWS, random_state=42).reset_index(drop=True)
+        sampled = True
     columns = [profile_column(df[col]) for col in df.columns]
     type_counts: dict[str, int] = dict(Counter(str(c.type) for c in columns))
     n_rows = int(df.shape[0])
@@ -321,6 +327,8 @@ def profile_dataset(df: pd.DataFrame) -> ProfileReport:
         duplicate_rate=round(duplicate_rows / n_rows, 4),
         memory_mb=round(float(df.memory_usage(deep=True).sum()) / 1024 / 1024, 3),
         type_counts=type_counts,
+        sampled=sampled,
+        sample_note=f"基于 {SAMPLE_ROWS:,} 行均匀采样（随机种子 42）" if sampled else "",
     )
     correlations = _top_correlations(df, columns)
     warnings = _collect_warnings(columns, correlations, duplicate_rows)
