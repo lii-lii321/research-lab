@@ -1,4 +1,4 @@
-﻿"""05_报告库页面。"""
+"""05_报告库页面。"""
 from __future__ import annotations
 
 import streamlit as st
@@ -14,9 +14,6 @@ def main() -> None:
     render_reports()
 
 
-
-
-
 def render_reports() -> None:
     st.subheader("报告库")
     st.caption(
@@ -27,6 +24,16 @@ def render_reports() -> None:
     if not items:
         st.info("还没有报告——在 ① 分析流程 或 ④ 自动研究 生成一份，或用命令行：`python cli.py analyze data.csv`")
         return
+
+    # 按数据集前缀筛选（报告名通常以数据集名开头）
+    prefixes = sorted({i["name"].split("_")[0] for i in items})
+    sel_filter = st.selectbox("按数据集筛选", ["全部"] + prefixes, key="reports_filter")
+    if sel_filter != "全部":
+        items = [i for i in items if i["name"].startswith(sel_filter)]
+        if not items:
+            st.info(f"筛选「{sel_filter}」下暂无报告。")
+            return
+
     names = [i["name"] for i in items]
     pick = st.selectbox("选择报告", names, key="reports_pick")
     detail = get_report(pick)
@@ -55,5 +62,5 @@ def render_reports() -> None:
     with st.expander("报告预览", expanded=True):
         st.markdown(detail["markdown"])
 
-main()
 
+main()

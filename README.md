@@ -60,6 +60,7 @@ flowchart LR
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple   # macOS/Linux: .venv/bin/python
 
+.venv\Scripts\python scripts\doctor.py                 # 环境体检：缺什么依赖/配置一目了然
 .venv\Scripts\python scripts\generate_sample.py        # 生成示例数据
 .venv\Scripts\python -m streamlit run app.py           # 界面 http://localhost:8501
 .venv\Scripts\python -m uvicorn main:app --port 8000   # API 文档 http://localhost:8000/docs
