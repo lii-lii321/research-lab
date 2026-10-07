@@ -12,7 +12,7 @@ from services.llm import LLMError, get_llm_client
 from services.planner import generate_experiment_plan
 from services.report import build_report
 from services.report_images import collect_profile_images
-from services.reports_store import save_report
+from services.reports_store import list_reports, save_report
 from services.repro import build_repro_script
 from services.research_questions import generate_research_questions_auto
 from services.tracking import TrackingStore
@@ -237,6 +237,12 @@ def render_flow(df: pd.DataFrame, report: ProfileReport) -> None:
         f"将汇总当前数据画像、研究问题与 {len(history)} 个已执行实验，"
         "生成 Markdown + HTML 双格式报告。"
     )
+    # 会话恢复：刷新后 history 丢失，但报告库里有沉底的完整报告——提示找回
+    if not history:
+        recent = list_reports()
+        if recent:
+            latest = recent[0]
+            st.caption(f"💡 刷新后实验历史会丢失；最近报告「{latest['name']}」在 ⑤ 报告库 可回看。")
     if st.button("生成研究报告", type="primary"):
         with st.spinner("正在汇总生成研究报告…"):
             questions = st.session_state.get("rqs") or []

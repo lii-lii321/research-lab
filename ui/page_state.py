@@ -10,6 +10,12 @@ from services.tracking import dataframe_fingerprint
 from utils.io import read_tabular
 from utils.sample_data import DATASET_GALLERY
 
+GALLERY_DESC = {
+    "学生成绩": "500 名学生的成绩单：含缺失值、离群值、重复行、类别不平衡与高相关字段对——适合演示统计检验全流程",
+    "门店销售": "120 天门店日销：季节性波动 + 周末效应 + 促销标志 + 缺失与离群——适合时间相关特征与回归",
+    "医疗随访": "200 人随访队列：类别不平衡结果事件 + 协变量相关——适合分类与不平衡数据处理",
+}
+
 
 def load_source() -> tuple[pd.DataFrame | None, str | None]:
     """数据源三模式：上传 / 粘贴 / 示例画廊（含运行时自愈）。"""
@@ -42,6 +48,8 @@ def load_source() -> tuple[pd.DataFrame | None, str | None]:
                 return cleaned.reset_index(drop=True), None
             return None, None
         gallery = st.selectbox("选择示例数据集", list(DATASET_GALLERY), key="sample_pick")
+        if gallery in GALLERY_DESC:
+            st.caption(GALLERY_DESC[gallery])
         names = {"学生成绩": "student_performance.csv", "门店销售": "store_sales.csv", "医疗随访": "cohort.csv"}
         st.session_state["dataset_name"] = names.get(gallery, gallery)
         try:
