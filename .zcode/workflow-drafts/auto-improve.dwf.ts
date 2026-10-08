@@ -36,9 +36,9 @@ interface WorkflowReport {
   notCovered: string[];
 }
 
-const PROJ = "D:/research-lab";
+const PROJ = "D:/My_Project/research-lab";
 const GIT = "D:/Git/cmd/git.exe";
-const PY = "D:/research-lab/.venv/Scripts/python.exe";
+const PY = "D:/My_Project/research-lab/.venv/Scripts/python.exe";
 const STOP_BATTERY = 15;
 
 phase("摸清基线");

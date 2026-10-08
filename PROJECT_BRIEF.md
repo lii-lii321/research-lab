@@ -62,7 +62,7 @@ MVP 用 Kaggle 公开数据集验证（如学生成绩 student performance），
 ## 前置收尾（开工前完成）
 
 1. MathMaster：PG / Tutor 真实评测 + 分享卡（v2.9.0 已 248 tests CI 绿，就差这两件）
-2. D:\Math_Tutor_RAG 旧版 7 文件决断：归档或重建，了断掉
+2. D:\My_Project\Math_Tutor_RAG 旧版 7 文件决断：归档或重建，了断掉
 
 ## 成功标准（做到 90% 而不是 70%）
 
