@@ -27,6 +27,9 @@ jobs:
           mypy
       - name: Run tests with coverage gate
         run: pytest -q -rs --cov=services --cov-report=term --cov-fail-under=85
+      - name: Benchmark ground-truth (subset, strict)
+        if: matrix.python-version == '3.10'
+        run: python benchmarks/runner.py --subset 3 --strict
 
   package:
     # 打包验证：pyproject 安装路径可用，且安装后的包在源码树外可导入

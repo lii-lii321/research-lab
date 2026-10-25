@@ -1,5 +1,15 @@
 ﻿# Changelog
 
+## 1.11.0 - 2026-10-25
+
+真值基准通道（思想移植自 DataAnalystAgent benchmarks，针对本项目增强）：
+
+- benchmarks/：三份教学场景合成数据集（确定性种子，生成公式系数即真值）+ 5 个任务 + runner（`python benchmarks/runner.py [--subset N] [--strict] [--regen]`）
+- 校验维度：检验族（宽松匹配参数/非参数）+ 结构化 decision + **方向性断言**（组均值高低 / r 符号）+ **阴性对照**（零效应列必须不显著）+ 报告关键词
+- 全程零写入（store=None、无文献无 ML），不污染实验追踪库与报告库
+- tests/test_benchmark_ground_truth.py：4 个真值守护测试（含阴性对照）；CI 3.10 job 追加 `--subset 3 --strict` 门禁
+- 226 测试全绿
+
 ## 1.10.0 - 2026-10-25
 
 打包化与 CI 矩阵：
