@@ -11,3 +11,4 @@ data/reports/
 build/
 dist/
 benchmarks/data/
+.venv-latest/

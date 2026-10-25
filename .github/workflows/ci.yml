@@ -48,6 +48,8 @@ jobs:
           python -c "import routers, services, ui, utils, models; import cli; print('imports ok')"
           research-lab --version
       - name: Run tests against installed package
+        env:
+          MPLBACKEND: Agg
         run: pytest -q
 
   smoke:

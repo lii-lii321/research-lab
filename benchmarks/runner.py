@@ -109,7 +109,10 @@ def run_pipeline_expectations(df: pd.DataFrame, task: dict) -> tuple[bool, str]:
     )
     problems: list[str] = []
     if result.status != "ok":
-        return False, f"agent 未完成：{result.reason}"
+        timeline = "; ".join(
+            f"{s.name}:{s.status}({s.detail[:80]})" for s in result.steps
+        )
+        return False, f"agent 未完成：{result.reason}｜时间线 {timeline}"
 
     records = [(r.plan, r.result) for r in result.records if r.result.status == "ok"]
 
