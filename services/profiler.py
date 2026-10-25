@@ -69,6 +69,18 @@ def _name_is_id_like(name: str) -> bool:
     return any(h in lowered for h in _ID_NAME_HINTS)
 
 
+def _datetime_shaped(values: pd.Series) -> bool:
+    """值本身须带日期/时间分隔符（- / :）才允许 datetime 推断。
+
+    pandas 3 起 `format="mixed"` 走 dateutil 逐元素解析，会把 "T1"/"T2" 这类
+    短代号标签当 ISO 时间前缀解析成功（本地 pandas 2.3 不会），导致教师/班组
+    列被误判为 datetime。分隔符守卫恢复 pandas 2 的判别边界。
+    """
+    if values.empty:
+        return False
+    return float(values.str.contains(r"[-/:]", regex=True).mean()) >= DATETIME_PARSE_RATIO
+
+
 def infer_column_type(series: pd.Series) -> ColumnType:
     non_null = series.dropna()
     if non_null.empty:
@@ -101,7 +113,7 @@ def infer_column_type(series: pd.Series) -> ColumnType:
     ):
         return "identifier"
     parsed = pd.to_datetime(values.head(200), errors="coerce", format="mixed")
-    if parsed.notna().mean() >= DATETIME_PARSE_RATIO:
+    if parsed.notna().mean() >= DATETIME_PARSE_RATIO and _datetime_shaped(values.head(200)):
         return "datetime"
     if n_unique <= LOW_CARDINALITY_MAX:
         return "categorical"
