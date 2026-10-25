@@ -7,3 +7,6 @@ data/tracking/
 data/models/
 data/reports/
 .env
+*.egg-info/
+build/
+dist/

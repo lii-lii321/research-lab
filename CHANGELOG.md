@@ -1,5 +1,14 @@
 ﻿# Changelog
 
+## 1.10.0 - 2026-10-25
+
+打包化与 CI 矩阵：
+
+- 新增 pyproject.toml：`pip install -e .` 可用，依赖与 dev extras 声明齐备，动态版本读取 utils/version.py（保持单一来源）
+- 新增控制台命令 `research-lab`（等价于 python cli.py）
+- CI test job 升级为 Python 3.10/3.11/3.12/3.13 矩阵（lint+mypy 仍只在 3.10 执行）；新增 package job 验证打包安装路径与源码树外导入
+- 222 测试全绿
+
 ## 1.9.0 - 2026-10-05
 
 落实 UX 手册 S1.2 环境体检 + 报告库筛选：
